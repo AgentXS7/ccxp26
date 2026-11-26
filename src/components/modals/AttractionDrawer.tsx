@@ -1,17 +1,23 @@
 import type React from 'react';
-import { ExternalLink, MapPin, Star, X } from 'lucide-react';
+import { CalendarPlus, ExternalLink, MapPin, Star, Trash2, X } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 import { AnimeHeartIcon } from '../ui/AnimeDecor';
 import { HoyoDialog } from '../ui/HoyoDialog';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface AttractionDrawerProps {
   attraction: AttractionMeta | null;
   onClose: () => void;
   placeLikes: PlaceLikeEntry[];
   voterName: string;
+  avatarPhoto?: string;
+  userProfiles: Record<string, string>;
   peoplePerCar: number;
+  isAdminAuthenticated: boolean;
   onTogglePlaceLike: (e: React.MouseEvent, attractionId: string) => void;
+  onAddToPersonalRoute: (attractionId: string) => void;
+  onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
 }
 
 export function AttractionDrawer({
@@ -19,17 +25,26 @@ export function AttractionDrawer({
   onClose,
   placeLikes,
   voterName,
+  avatarPhoto,
+  userProfiles,
   peoplePerCar,
+  isAdminAuthenticated,
   onTogglePlaceLike,
+  onAddToPersonalRoute,
+  onDeletePlaceAsAdmin,
 }: AttractionDrawerProps) {
+  const normalizedMe = voterName.trim().toLowerCase();
+  const getPhoto = (name: string) => {
+    const k = name.trim().toLowerCase();
+    return k === normalizedMe && avatarPhoto ? avatarPhoto : userProfiles[k];
+  };
+
   const likesForModal = attraction
     ? placeLikes.filter((l) => l.attractionId === attraction.id)
     : [];
   const isLikedModal =
-    attraction && voterName.trim()
-      ? likesForModal.some(
-          (l) => l.voterName.trim().toLowerCase() === voterName.trim().toLowerCase()
-        )
+    attraction && normalizedMe
+      ? likesForModal.some((l) => l.voterName.trim().toLowerCase() === normalizedMe)
       : false;
 
   return (
@@ -92,9 +107,15 @@ export function AttractionDrawer({
               {likesForModal.map((l) => (
                 <span
                   key={l.id}
-                  className="bg-[#EC6B6B]/18 text-[#FFD0D0] border border-[#EC6B6B]/30 px-2.5 py-0.5 rounded-full font-semibold"
+                  className="inline-flex items-center gap-1 bg-[#EC6B6B]/18 text-[#FFD0D0] border border-[#EC6B6B]/30 px-2.5 py-0.5 rounded-full font-semibold"
                 >
-                  {l.voterName}
+                  <UserAvatar
+                    photo={getPhoto(l.voterName)}
+                    name={l.voterName}
+                    sizeClass="w-4 h-4"
+                    textClass="text-[9px]"
+                  />
+                  <span>{l.voterName}</span>
                 </span>
               ))}
             </div>
@@ -157,14 +178,26 @@ export function AttractionDrawer({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-2">
+          <div className="flex flex-wrap gap-2 pt-2 pb-4 sm:pb-0">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onAddToPersonalRoute(attraction.id);
+              }}
+              className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-1.5 hoyo-accent-pill border font-extrabold text-xs py-3 px-3 rounded-xl transition hover:border-[#E5B869]/60"
+            >
+              <CalendarPlus className="w-4 h-4" />
+              <span>+ Meu Roteiro</span>
+            </button>
+
             <a
               href={attraction.mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 inline-flex items-center justify-center gap-2 hoyo-accent-btn font-bold text-xs py-3 px-4 rounded-xl transition"
+              className="flex-1 min-w-[150px] inline-flex items-center justify-center gap-2 hoyo-accent-btn font-bold text-xs py-3 px-4 rounded-xl transition"
             >
-              <MapPin className="w-4 h-4" /> Abrir no Google Maps
+              <MapPin className="w-4 h-4" /> Google Maps
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
 
@@ -177,6 +210,27 @@ export function AttractionDrawer({
               >
                 {attraction.instagram}
               </a>
+            )}
+
+            {isAdminAuthenticated && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Remover "${attraction.name}" do Explorar para todo o grupo?`
+                    )
+                  ) {
+                    onDeletePlaceAsAdmin(attraction);
+                    onClose();
+                  }
+                }}
+                className="inline-flex items-center justify-center gap-1.5 bg-[#EC6B6B]/18 hover:bg-[#EC6B6B]/30 border border-[#EC6B6B]/45 text-[#FFD0D0] font-bold text-xs py-3 px-3.5 rounded-xl transition"
+                title="Remover lugar (Admin)"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Remover</span>
+              </button>
             )}
           </div>
         </div>

@@ -3,20 +3,17 @@ import {
   AlertTriangle,
   ChevronRight,
   Clock,
+  EyeOff,
+  Lock,
   MapPin,
   Navigation,
+  Plus,
+  RotateCcw,
   Star,
   Train,
+  Trash2,
 } from 'lucide-react';
 import { handleImgError } from '../../lib/utils';
-import {
-  AnimeDislikeIcon,
-  AnimeLikeIcon,
-  CornerOrnaments,
-  StarSparkleIcon,
-} from '../ui/AnimeDecor';
-import { OnigiriSticker, StickerForCategory } from '../ui/GameStickers';
-import { UserAvatar } from '../ui/UserAvatar';
 import type {
   AttractionMeta,
   DayBadgeType,
@@ -26,6 +23,14 @@ import type {
   StopVoteEntry,
   TripConfig,
 } from '../../types';
+import {
+  AnimeDislikeIcon,
+  AnimeLikeIcon,
+  CornerOrnaments,
+  StarSparkleIcon,
+} from '../ui/AnimeDecor';
+import { OnigiriSticker, StickerForCategory } from '../ui/GameStickers';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface ItineraryTabProps {
   config: TripConfig;
@@ -39,12 +44,17 @@ interface ItineraryTabProps {
   attractions: AttractionMeta[];
   stopVotes: StopVoteEntry[];
   voterName: string;
-  avatarBadge: string;
   avatarPhoto?: string;
+  userProfiles: Record<string, string>;
   compactCards: boolean;
+  hiddenOfficialCount: number;
   onOpenVoterModal: () => void;
   onVoteClick: (e: React.MouseEvent, stopId: string, choice: 'yes' | 'no') => void;
   onSelectAttraction: (attr: AttractionMeta) => void;
+  onOpenAddPersonalStop: () => void;
+  onHideOfficialStop: (stopId: string) => void;
+  onRemovePersonalStop: (stopId: string) => void;
+  onRestoreOfficialStops: () => void;
 }
 
 function getDayBadgeStyle(badge: DayBadgeType) {
@@ -71,38 +81,45 @@ export function ItineraryTab({
   attractions,
   stopVotes,
   voterName,
-  avatarBadge,
   avatarPhoto,
+  userProfiles,
   compactCards,
+  hiddenOfficialCount,
   onOpenVoterModal,
   onVoteClick,
   onSelectAttraction,
+  onOpenAddPersonalStop,
+  onHideOfficialStop,
+  onRemovePersonalStop,
+  onRestoreOfficialStops,
 }: ItineraryTabProps) {
   const normalizedMe = voterName.trim().toLowerCase();
+  const getPhoto = (name: string) => {
+    const k = name.trim().toLowerCase();
+    return k === normalizedMe && avatarPhoto ? avatarPhoto : userProfiles[k];
+  };
+
   return (
     <div className="space-y-5">
       {/* Barra de Identificação para Votação nas Atrações */}
-      <div className="rounded-2xl hoyo-card hoyo-shimmer-top px-4 py-3 flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-full bg-[#212847] border border-[#E5B869]/35 flex items-center justify-center overflow-hidden shrink-0">
-            {voterName.trim() ? (
-              <UserAvatar
-                photo={avatarPhoto}
-                badge={avatarBadge}
-                sizeClass="w-8 h-8"
-                textClass="text-base"
-              />
-            ) : (
-              <span className="text-base">🗳️</span>
-            )}
-          </span>
+      <div className="rounded-2xl hoyo-card hoyo-shimmer-top px-3.5 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           {voterName.trim() ? (
-            <p className="text-xs text-[#CBD2EC] flex items-center gap-1.5 flex-wrap">
-              <span>Votando nas atrações como</span>
-              <strong className="inline-flex items-center gap-1 text-[#8AE5DB] font-extrabold">
-                {!avatarPhoto && <span aria-hidden="true">{avatarBadge}</span>}
-                <span>{voterName}</span>
-              </strong>
+            <UserAvatar
+              photo={avatarPhoto}
+              name={voterName}
+              sizeClass="w-8 h-8"
+              textClass="text-xs"
+            />
+          ) : (
+            <span className="w-8 h-8 rounded-full bg-[#212847] border border-[#E5B869]/35 flex items-center justify-center text-base shrink-0">
+              🗳️
+            </span>
+          )}
+          {voterName.trim() ? (
+            <p className="text-xs text-[#CBD2EC] truncate">
+              Votando como{' '}
+              <strong className="text-[#8AE5DB] font-extrabold">{voterName}</strong>
             </p>
           ) : (
             <p className="text-xs text-[#CBD2EC]">
@@ -114,7 +131,7 @@ export function ItineraryTab({
               <strong className="inline-flex items-center gap-1 text-[#F7A3A3]">
                 <AnimeDislikeIcon className="w-3.5 h-3.5" /> Não
               </strong>{' '}
-              em qualquer atração para votar com seu nome
+              para votar com seu nome
             </p>
           )}
         </div>
@@ -122,9 +139,9 @@ export function ItineraryTab({
         <button
           type="button"
           onClick={onOpenVoterModal}
-          className="text-xs font-bold text-[#CAD4FF] hover:text-white hoyo-accent-pill border px-3 py-1.5 rounded-xl transition"
+          className="text-xs font-bold text-[#CAD4FF] hover:text-white hoyo-accent-pill border px-3 py-1.5 rounded-xl transition shrink-0"
         >
-          {voterName.trim() ? 'Trocar nome' : 'Definir meu nome'}
+          {voterName.trim() ? 'Editar perfil' : 'Definir perfil'}
         </button>
       </div>
 
@@ -137,7 +154,7 @@ export function ItineraryTab({
               key={day.date}
               type="button"
               onClick={() => setSelectedDate(day.date)}
-              className={`shrink-0 px-3.5 py-2.5 rounded-2xl border text-left transition min-w-[96px] ${
+              className={`shrink-0 px-3.5 py-2.5 rounded-2xl border text-left transition min-w-[92px] ${
                 isSelected
                   ? 'hoyo-accent-btn border-[#E5B869]/60 shadow-lg'
                   : 'hoyo-card text-[#CBD2EC] hover:border-[#E5B869]/35'
@@ -179,14 +196,22 @@ export function ItineraryTab({
       </div>
 
       {/* Cabeçalho do Dia Selecionado */}
-      <div className="relative overflow-hidden rounded-3xl hoyo-card hoyo-gold-hairline hoyo-shimmer-top p-5 space-y-3">
+      <div className="relative overflow-hidden rounded-3xl hoyo-card hoyo-gold-hairline hoyo-shimmer-top p-4 sm:p-5 space-y-3">
         <CornerOrnaments />
         <StickerForCategory
-          category={currentDay.badge === 'CCXP26' ? 'CCXP26' : currentDay.badge === 'Dia Livre' ? 'Restaurante' : currentDay.badge === 'Chegada' ? 'Aeroporto' : 'Passeio'}
+          category={
+            currentDay.badge === 'CCXP26'
+              ? 'CCXP26'
+              : currentDay.badge === 'Dia Livre'
+              ? 'Restaurante'
+              : currentDay.badge === 'Chegada'
+              ? 'Aeroporto'
+              : 'Passeio'
+          }
           className="pointer-events-none absolute -bottom-3 -right-3 w-20 h-20 opacity-20 rotate-12"
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 text-xs font-extrabold bg-[#222A4A] text-white px-2.5 py-1 rounded-lg border border-[#8596D6]/20">
               <StarSparkleIcon className="w-3 h-3 text-[#E5B869]" />
               {currentDay.shortLabel} ({currentDay.weekday})
@@ -200,15 +225,15 @@ export function ItineraryTab({
             </span>
           </div>
           <span className="text-xs text-[#9BA3C2] flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5 text-[#E5B869]" />
-            {currentDay.regionFocus}
+            <MapPin className="w-3.5 h-3.5 text-[#E5B869] shrink-0" />
+            <span>{currentDay.regionFocus}</span>
           </span>
         </div>
 
-        <h2 className="text-xl sm:text-2xl font-extrabold text-white">{currentDay.title}</h2>
+        <h2 className="text-lg sm:text-2xl font-extrabold text-white">{currentDay.title}</h2>
         <p className="text-xs sm:text-sm text-[#CBD2EC] leading-relaxed">{currentDay.summary}</p>
 
-        {/* Alerta Inteligente do Dia (quando houver) */}
+        {/* Alerta Inteligente do Dia */}
         {currentDay.smartAlert && (
           <div
             className={`rounded-2xl p-3.5 border flex items-start gap-3 ${
@@ -231,22 +256,45 @@ export function ItineraryTab({
           </div>
         )}
 
-        {/* Filtro por Turno */}
-        <div className="pt-2 flex flex-wrap gap-1.5">
-          {(['Todos', 'Manhã e Almoço', 'Tarde', 'Noite e Madrugada'] as const).map((shift) => (
+        {/* Filtro por Turno + Ações do Meu Roteiro */}
+        <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {(['Todos', 'Manhã e Almoço', 'Tarde', 'Noite e Madrugada'] as const).map((shift) => (
+              <button
+                key={shift}
+                type="button"
+                onClick={() => setShiftFilter(shift)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition ${
+                  shiftFilter === shift
+                    ? 'bg-[#EEF1FA] text-[#0C0F1D]'
+                    : 'hoyo-card-inner text-[#9BA3C2] hover:text-white'
+                }`}
+              >
+                {shift}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {hiddenOfficialCount > 0 && (
+              <button
+                type="button"
+                onClick={onRestoreOfficialStops}
+                className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-[#1C223B] border border-[#8596D6]/30 text-[#CAD4FF] hover:text-white transition"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Restaurar {hiddenOfficialCount} do grupo</span>
+              </button>
+            )}
             <button
-              key={shift}
               type="button"
-              onClick={() => setShiftFilter(shift)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition ${
-                shiftFilter === shift
-                  ? 'bg-[#EEF1FA] text-[#0C0F1D]'
-                  : 'hoyo-card-inner text-[#9BA3C2] hover:text-white'
-              }`}
+              onClick={onOpenAddPersonalStop}
+              className="inline-flex items-center gap-1 text-xs font-extrabold px-3 py-1.5 rounded-xl hoyo-accent-btn shadow transition"
             >
-              {shift}
+              <Plus className="w-3.5 h-3.5" />
+              <span>Adicionar ao meu dia</span>
             </button>
-          ))}
+          </div>
         </div>
       </div>
 
@@ -255,7 +303,7 @@ export function ItineraryTab({
         {dayStops.length === 0 ? (
           <div className="rounded-2xl hoyo-card p-6 text-center text-sm text-[#9BA3C2] space-y-2">
             <OnigiriSticker className="w-12 h-12 mx-auto animate-sticker-float" />
-            <p>Nenhuma atividade específica neste turno. Aproveite o tempo livre!</p>
+            <p>Nenhuma atividade neste turno. Adicione lugares do Explorar ou aproveite o tempo livre!</p>
           </div>
         ) : (
           dayStops.map((stop) => {
@@ -269,10 +317,8 @@ export function ItineraryTab({
             const totalVotes = votesForStop.length;
             const yesPct = totalVotes > 0 ? Math.round((yesVotes.length / totalVotes) * 100) : 0;
             const noPct = totalVotes > 0 ? Math.round((noVotes.length / totalVotes) * 100) : 0;
-            const myVote = voterName.trim()
-              ? votesForStop.find(
-                  (v) => v.voterName.trim().toLowerCase() === voterName.trim().toLowerCase()
-                )
+            const myVote = normalizedMe
+              ? votesForStop.find((v) => v.voterName.trim().toLowerCase() === normalizedMe)
               : undefined;
 
             return (
@@ -280,10 +326,14 @@ export function ItineraryTab({
                 <div
                   onClick={() => linkedAttr && onSelectAttraction(linkedAttr)}
                   className={`rounded-2xl hoyo-card overflow-hidden transition ${
-                    linkedAttr
-                      ? 'cursor-pointer hover:border-[#E5B869]/50'
+                    linkedAttr ? 'cursor-pointer hover:border-[#E5B869]/50' : ''
+                  } ${
+                    stop.isPersonal
+                      ? 'border-[#657EF8]/45'
+                      : stop.isMandatory
+                      ? 'border-[#E5B869]/30'
                       : ''
-                  } ${stop.isMandatory ? 'border-[#E5B869]/30' : ''}`}
+                  }`}
                 >
                   <div className="flex flex-col sm:flex-row">
                     {linkedAttr && !compactCards && (
@@ -301,7 +351,7 @@ export function ItineraryTab({
 
                     <div className={`${compactCards ? 'p-3.5' : 'p-4 sm:p-5'} flex-1 min-w-0`}>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[11px] font-bold uppercase tracking-wider hoyo-accent-pill border px-2.5 py-0.5 rounded-md">
                             {stop.shift}
                           </span>
@@ -311,26 +361,38 @@ export function ItineraryTab({
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap gap-1.5">
-                          {stop.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                tag.includes('Obrigatório') || tag.includes('Reserva')
-                                  ? 'bg-[#E5B869]/15 text-[#F6D794] border border-[#E5B869]/35'
-                                  : tag.includes('Grátis') || tag.includes('Mais barato')
-                                  ? 'bg-[#47C5B8]/15 text-[#8AE5DB] border border-[#47C5B8]/35'
-                                  : 'bg-[#212847] text-[#CBD2EC]'
-                              }`}
-                            >
-                              {tag}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {stop.isMandatory && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E5B869]/15 text-[#F6D794] border border-[#E5B869]/35">
+                              <Lock className="w-2.5 h-2.5" /> Fixo do grupo
                             </span>
-                          ))}
+                          )}
+                          {stop.isPersonal && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full hoyo-accent-pill border">
+                              Meu roteiro
+                            </span>
+                          )}
+                          {stop.tags
+                            .filter((t) => t !== 'Meu roteiro')
+                            .map((tag) => (
+                              <span
+                                key={tag}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  tag.includes('Obrigatório') || tag.includes('Reserva')
+                                    ? 'bg-[#E5B869]/15 text-[#F6D794] border border-[#E5B869]/35'
+                                    : tag.includes('Grátis') || tag.includes('Mais barato')
+                                    ? 'bg-[#47C5B8]/15 text-[#8AE5DB] border border-[#47C5B8]/35'
+                                    : 'bg-[#212847] text-[#CBD2EC]'
+                                }`}
+                              >
+                                {tag}
+                              </span>
+                            ))}
                         </div>
                       </div>
 
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
                           <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
                             {stop.title}
                           </h3>
@@ -341,11 +403,42 @@ export function ItineraryTab({
                           )}
                         </div>
 
-                        {linkedAttr && (
-                          <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#CBD2EC] bg-[#212847] px-2.5 py-1.5 rounded-xl border border-[#8596D6]/20">
-                            Ficha <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        )}
+                        <div
+                          className="flex items-center gap-1.5 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {stop.isPersonal ? (
+                            <button
+                              type="button"
+                              onClick={() => onRemovePersonalStop(stop.id)}
+                              title="Remover do meu roteiro"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1.5 rounded-xl bg-[#EC6B6B]/15 border border-[#EC6B6B]/35 text-[#FFD0D0] hover:bg-[#EC6B6B]/25 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Remover</span>
+                            </button>
+                          ) : !stop.isMandatory ? (
+                            <button
+                              type="button"
+                              onClick={() => onHideOfficialStop(stop.id)}
+                              title="Ocultar só do meu roteiro (não altera o grupo)"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-[#212847] border border-[#8596D6]/20 text-[#9BA3C2] hover:text-white transition"
+                            >
+                              <EyeOff className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Ocultar</span>
+                            </button>
+                          ) : null}
+
+                          {linkedAttr && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectAttraction(linkedAttr)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#CBD2EC] bg-[#212847] px-2.5 py-1.5 rounded-xl border border-[#8596D6]/20"
+                            >
+                              Ficha <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <p className="text-xs sm:text-sm text-[#CBD2EC] mt-2.5 leading-relaxed">
@@ -359,129 +452,113 @@ export function ItineraryTab({
                         </div>
                       )}
 
-                      {/* Enquete Estilo WhatsApp (👍 Sim / 👎 Não) */}
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-3.5 rounded-2xl hoyo-card-inner p-3 space-y-2.5"
-                      >
-                        <div className="flex items-center justify-between text-[11px] text-[#9BA3C2]">
-                          <span className="font-semibold">Você topa essa parada?</span>
-                          <span>
-                            {totalVotes === 0
-                              ? 'Nenhum voto ainda'
-                              : `${totalVotes} ${totalVotes === 1 ? 'voto' : 'votos'}`}
-                          </span>
-                        </div>
+                      {/* Enquete do Grupo (somente nas paradas oficiais) */}
+                      {!stop.isPersonal && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-3.5 rounded-2xl hoyo-card-inner p-3 space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between text-[11px] text-[#9BA3C2]">
+                            <span className="font-semibold">Você topa essa parada?</span>
+                            <span>
+                              {totalVotes === 0
+                                ? 'Nenhum voto ainda'
+                                : `${totalVotes} ${totalVotes === 1 ? 'voto' : 'votos'}`}
+                            </span>
+                          </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => onVoteClick(e, stop.id, 'yes')}
-                            className={`relative overflow-hidden rounded-xl border px-3 py-2.5 text-left transition min-h-[42px] ${
-                              myVote?.choice === 'yes'
-                                ? 'border-[#47C5B8] bg-[#47C5B8]/18 text-[#BFF4ED]'
-                                : 'border-[#8596D6]/20 bg-[#171C33]/90 text-[#E5E9F8] hover:border-[#47C5B8]/50'
-                            }`}
-                          >
-                            <div
-                              className="absolute inset-y-0 left-0 bg-[#47C5B8]/18 transition-all duration-300"
-                              style={{ width: `${yesPct}%` }}
-                            />
-                            <div className="relative flex items-center justify-between text-xs font-bold">
-                              <span className="flex items-center gap-1.5">
-                                <AnimeLikeIcon className="w-4 h-4" /> Sim
-                              </span>
-                              <span>{yesVotes.length}</span>
-                            </div>
-                          </button>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => onVoteClick(e, stop.id, 'yes')}
+                              className={`relative overflow-hidden rounded-xl border px-3 py-2.5 text-left transition min-h-[42px] ${
+                                myVote?.choice === 'yes'
+                                  ? 'border-[#47C5B8] bg-[#47C5B8]/18 text-[#BFF4ED]'
+                                  : 'border-[#8596D6]/20 bg-[#171C33]/90 text-[#E5E9F8] hover:border-[#47C5B8]/50'
+                              }`}
+                            >
+                              <div
+                                className="absolute inset-y-0 left-0 bg-[#47C5B8]/18 transition-all duration-300"
+                                style={{ width: `${yesPct}%` }}
+                              />
+                              <div className="relative flex items-center justify-between text-xs font-bold">
+                                <span className="flex items-center gap-1.5">
+                                  <AnimeLikeIcon className="w-4 h-4" /> Sim
+                                </span>
+                                <span>{yesVotes.length}</span>
+                              </div>
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={(e) => onVoteClick(e, stop.id, 'no')}
-                            className={`relative overflow-hidden rounded-xl border px-3 py-2.5 text-left transition min-h-[42px] ${
-                              myVote?.choice === 'no'
-                                ? 'border-[#EC6B6B] bg-[#EC6B6B]/18 text-[#FFD0D0]'
-                                : 'border-[#8596D6]/20 bg-[#171C33]/90 text-[#E5E9F8] hover:border-[#EC6B6B]/50'
-                            }`}
-                          >
-                            <div
-                              className="absolute inset-y-0 left-0 bg-[#EC6B6B]/18 transition-all duration-300"
-                              style={{ width: `${noPct}%` }}
-                            />
-                            <div className="relative flex items-center justify-between text-xs font-bold">
-                              <span className="flex items-center gap-1.5">
-                                <AnimeDislikeIcon className="w-4 h-4" /> Não
-                              </span>
-                              <span>{noVotes.length}</span>
-                            </div>
-                          </button>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={(e) => onVoteClick(e, stop.id, 'no')}
+                              className={`relative overflow-hidden rounded-xl border px-3 py-2.5 text-left transition min-h-[42px] ${
+                                myVote?.choice === 'no'
+                                  ? 'border-[#EC6B6B] bg-[#EC6B6B]/18 text-[#FFD0D0]'
+                                  : 'border-[#8596D6]/20 bg-[#171C33]/90 text-[#E5E9F8] hover:border-[#EC6B6B]/50'
+                              }`}
+                            >
+                              <div
+                                className="absolute inset-y-0 left-0 bg-[#EC6B6B]/18 transition-all duration-300"
+                                style={{ width: `${noPct}%` }}
+                              />
+                              <div className="relative flex items-center justify-between text-xs font-bold">
+                                <span className="flex items-center gap-1.5">
+                                  <AnimeDislikeIcon className="w-4 h-4" /> Não
+                                </span>
+                                <span>{noVotes.length}</span>
+                              </div>
+                            </button>
+                          </div>
 
-                        {totalVotes > 0 && (
-                          <div className="pt-1 space-y-1 text-[11px]">
-                            {yesVotes.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <AnimeLikeIcon className="w-3.5 h-3.5" />
-                                {yesVotes.map((v) => {
-                                  const isMe =
-                                    Boolean(normalizedMe) &&
-                                    v.voterName.trim().toLowerCase() === normalizedMe;
-                                  const badge = isMe ? avatarBadge : v.avatarBadge;
-                                  const photo = isMe ? avatarPhoto : undefined;
-                                  return (
+                          {totalVotes > 0 && (
+                            <div className="pt-1 space-y-1 text-[11px]">
+                              {yesVotes.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <AnimeLikeIcon className="w-3.5 h-3.5" />
+                                  {yesVotes.map((v) => (
                                     <span
                                       key={v.id}
                                       className="inline-flex items-center gap-1 bg-[#47C5B8]/15 text-[#BFF4ED] border border-[#47C5B8]/25 px-2 py-0.5 rounded-full font-medium"
                                     >
-                                      {(photo || badge) && (
-                                        <UserAvatar
-                                          photo={photo}
-                                          badge={badge || ''}
-                                          sizeClass="w-4 h-4"
-                                          textClass="text-[11px]"
-                                        />
-                                      )}
+                                      <UserAvatar
+                                        photo={getPhoto(v.voterName)}
+                                        name={v.voterName}
+                                        sizeClass="w-4 h-4"
+                                        textClass="text-[9px]"
+                                      />
                                       <span>{v.voterName}</span>
                                     </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-                            {noVotes.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <AnimeDislikeIcon className="w-3.5 h-3.5" />
-                                {noVotes.map((v) => {
-                                  const isMe =
-                                    Boolean(normalizedMe) &&
-                                    v.voterName.trim().toLowerCase() === normalizedMe;
-                                  const badge = isMe ? avatarBadge : v.avatarBadge;
-                                  const photo = isMe ? avatarPhoto : undefined;
-                                  return (
+                                  ))}
+                                </div>
+                              )}
+                              {noVotes.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <AnimeDislikeIcon className="w-3.5 h-3.5" />
+                                  {noVotes.map((v) => (
                                     <span
                                       key={v.id}
                                       className="inline-flex items-center gap-1 bg-[#EC6B6B]/15 text-[#FFD0D0] border border-[#EC6B6B]/25 px-2 py-0.5 rounded-full font-medium"
                                     >
-                                      {(photo || badge) && (
-                                        <UserAvatar
-                                          photo={photo}
-                                          badge={badge || ''}
-                                          sizeClass="w-4 h-4"
-                                          textClass="text-[11px]"
-                                        />
-                                      )}
+                                      <UserAvatar
+                                        photo={getPhoto(v.voterName)}
+                                        name={v.voterName}
+                                        sizeClass="w-4 h-4"
+                                        textClass="text-[9px]"
+                                      />
                                       <span>{v.voterName}</span>
                                     </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {linkedAttr && (
                         <div className="mt-3 pt-3 border-t border-[#8596D6]/15 flex flex-wrap items-center justify-between gap-2 text-xs text-[#9BA3C2]">
-                          <span className="truncate max-w-md">{linkedAttr.address}</span>
+                          <span className="truncate max-w-full sm:max-w-md">{linkedAttr.address}</span>
                           <div className="flex items-center gap-3">
                             {linkedAttr.rating && (
                               <span className="inline-flex items-center gap-1 text-[#F6D794] font-semibold">
@@ -490,7 +567,7 @@ export function ItineraryTab({
                               </span>
                             )}
                             <span className="text-[#8CA0FF] font-semibold">
-                              Ver horários & Maps →
+                              Ver horários &amp; Maps →
                             </span>
                           </div>
                         </div>

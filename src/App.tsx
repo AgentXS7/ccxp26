@@ -30,6 +30,7 @@ import { Header } from './components/layout/Header';
 import { Toast } from './components/layout/Toast';
 import { FloatingStickerLayer, MascotCorner } from './components/ui/FunLayer';
 
+import { AddPersonalStopModal } from './components/modals/AddPersonalStopModal';
 import { AddPlaceModal } from './components/modals/AddPlaceModal';
 import { AttractionDrawer } from './components/modals/AttractionDrawer';
 import { InstallModal } from './components/modals/InstallModal';
@@ -51,6 +52,7 @@ import type {
   ItineraryDay,
   ItineraryStop,
   PersonalBudgetState,
+  PersonalItineraryState,
   PlaceLikeEntry,
   RsvpEntry,
   ShiftType,
@@ -167,6 +169,18 @@ export default function App() {
     STORAGE_KEYS.PLACE_LIKES,
     []
   );
+  const [userProfiles, setUserProfiles] = usePersistedState<Record<string, string>>(
+    STORAGE_KEYS.USER_PROFILES,
+    {}
+  );
+  const [removedPlaceIds, setRemovedPlaceIds] = usePersistedState<string[]>(
+    STORAGE_KEYS.REMOVED_PLACES,
+    []
+  );
+  const [personalItinerary, setPersonalItinerary] = usePersistedState<PersonalItineraryState>(
+    STORAGE_KEYS.PERSONAL_ITINERARY,
+    { hiddenStopIds: [], addedStops: [] }
+  );
 
   // Área Administrativa
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -188,6 +202,8 @@ export default function App() {
     cloudFetch,
     syncFromCloud,
     pushAllLocalToCloud,
+    syncUserProfileToCloud,
+    deletePlaceAsAdmin,
   } = useSupabaseSync({
     config,
     setConfig,
@@ -203,9 +219,23 @@ export default function App() {
     setStopVotes,
     placeLikes,
     setPlaceLikes,
+    setUserProfiles,
+    removedPlaceIds,
+    setRemovedPlaceIds,
+    voterName,
+    avatarPhoto: userPrefs.avatarPhoto,
     isAdminAuthenticated,
     showToast,
   });
+
+  // Garante que a foto de perfil já salva no aparelho suba para o Supabase automaticamente
+  useEffect(() => {
+    if (!hasSupabase || !voterName.trim() || !userPrefs.avatarPhoto) return;
+    const key = voterName.trim().toLowerCase();
+    if (userProfiles[key] !== userPrefs.avatarPhoto) {
+      syncUserProfileToCloud(voterName, userPrefs.avatarPhoto);
+    }
+  }, [hasSupabase, voterName, userPrefs.avatarPhoto, userProfiles, syncUserProfileToCloud]);
 
   const deviceToken = useMemo(() => getOrCreateDeviceToken(), []);
 
@@ -401,6 +431,7 @@ export default function App() {
     const clean = voterNameInput.trim();
     if (!clean) return;
     setVoterName(clean);
+    syncUserProfileToCloud(clean, userPrefs.avatarPhoto);
     if (voterPromptModal.pendingStopId && voterPromptModal.pendingChoice) {
       applyStopVote(voterPromptModal.pendingStopId, voterPromptModal.pendingChoice, clean);
     }
@@ -638,12 +669,76 @@ export default function App() {
   );
 
   const dayStops = useMemo(() => {
-    return stops.filter((s) => {
-      if (s.dayDate !== currentDay.date) return false;
-      if (shiftFilter !== 'Todos' && s.shift !== shiftFilter) return false;
-      return true;
-    });
-  }, [stops, currentDay.date, shiftFilter]);
+    const shiftOrder: Record<ShiftType, number> = {
+      'Manhã e Almoço': 0,
+      Tarde: 1,
+      'Noite e Madrugada': 2,
+    };
+    const hiddenSet = new Set(personalItinerary.hiddenStopIds);
+    const officialForDay = stops.filter(
+      (s) => s.dayDate === currentDay.date && (s.isMandatory || !hiddenSet.has(s.id))
+    );
+    const personalForDay = personalItinerary.addedStops.filter(
+      (s) => s.dayDate === currentDay.date
+    );
+    return [...officialForDay, ...personalForDay]
+      .filter((s) => shiftFilter === 'Todos' || s.shift === shiftFilter)
+      .sort((a, b) => shiftOrder[a.shift] - shiftOrder[b.shift]);
+  }, [stops, personalItinerary, currentDay.date, shiftFilter]);
+
+  const hiddenOfficialCount = useMemo(() => {
+    const hiddenSet = new Set(personalItinerary.hiddenStopIds);
+    return stops.filter(
+      (s) => s.dayDate === currentDay.date && !s.isMandatory && hiddenSet.has(s.id)
+    ).length;
+  }, [stops, personalItinerary.hiddenStopIds, currentDay.date]);
+
+  const [personalStopModal, setPersonalStopModal] = useState<{
+    open: boolean;
+    attractionId: string | null;
+  }>({ open: false, attractionId: null });
+
+  const handleAddPersonalStop = (newStop: ItineraryStop) => {
+    setPersonalItinerary((prev) => ({
+      ...prev,
+      addedStops: [...prev.addedStops, newStop],
+    }));
+    setSelectedDate(newStop.dayDate);
+    setActiveTab('roteiro');
+    showToast(`"${newStop.title}" adicionado ao seu roteiro!`);
+  };
+
+  const handleHideOfficialStop = (stopId: string) => {
+    setPersonalItinerary((prev) => ({
+      ...prev,
+      hiddenStopIds: Array.from(new Set([...prev.hiddenStopIds, stopId])),
+    }));
+    showToast('Parada ocultada só no seu roteiro.', 'info');
+  };
+
+  const handleRemovePersonalStop = (stopId: string) => {
+    setPersonalItinerary((prev) => ({
+      ...prev,
+      addedStops: prev.addedStops.filter((s) => s.id !== stopId),
+    }));
+    showToast('Parada removida do seu roteiro.', 'info');
+  };
+
+  const handleRestoreOfficialStops = () => {
+    const idsOfDay = new Set(
+      stops.filter((s) => s.dayDate === currentDay.date).map((s) => s.id)
+    );
+    setPersonalItinerary((prev) => ({
+      ...prev,
+      hiddenStopIds: prev.hiddenStopIds.filter((id) => !idsOfDay.has(id)),
+    }));
+    showToast('Paradas opcionais do grupo restauradas neste dia!');
+  };
+
+  const handleDeletePlaceAsAdmin = async (attr: AttractionMeta) => {
+    await deletePlaceAsAdmin(attr);
+    showToast(`"${attr.name}" removido do Explorar.`, 'info');
+  };
 
   // Explorar
   const [exploreQuery, setExploreQuery] = useState('');
@@ -661,6 +756,9 @@ export default function App() {
     notes: '',
     imageUrl: '',
     inOfficialRoute: false,
+    addToPersonalRoute: false,
+    targetDayDate: '2026-12-04',
+    targetShift: 'Tarde' as ShiftType,
   });
 
   const handleCreateCustomPlace = (e: React.FormEvent) => {
@@ -715,6 +813,25 @@ export default function App() {
         });
     }
 
+    if (newPlaceForm.addToPersonalRoute) {
+      const personalStop: ItineraryStop = {
+        id: 'stop_personal_' + Date.now().toString(36),
+        dayDate: newPlaceForm.targetDayDate || currentDay.date,
+        shift: newPlaceForm.targetShift,
+        timeLabel: created.hours || 'Horário flexível',
+        title: created.name,
+        subtitle: `${created.category} • ${created.region}`,
+        attractionId: created.id,
+        tags: ['Meu roteiro'],
+        details: created.notes,
+        isPersonal: true,
+      };
+      setPersonalItinerary((prev) => ({
+        ...prev,
+        addedStops: [...prev.addedStops, personalStop],
+      }));
+    }
+
     setNewPlaceForm({
       name: '',
       region: '1. Vila Mariana / Ibirapuera / Moema',
@@ -724,9 +841,16 @@ export default function App() {
       notes: '',
       imageUrl: '',
       inOfficialRoute: false,
+      addToPersonalRoute: false,
+      targetDayDate: currentDay.date,
+      targetShift: 'Tarde',
     });
     setAddPlaceModalOpen(false);
-    showToast(`"${cleanName}" adicionado ao Explorar!`);
+    showToast(
+      newPlaceForm.addToPersonalRoute
+        ? `"${cleanName}" salvo no Explorar e no seu Roteiro!`
+        : `"${cleanName}" adicionado ao Explorar!`
+    );
   };
 
   const regionsList = useMemo(() => {
@@ -834,7 +958,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen text-[#EEF1FA] pb-28 md:pb-12 selection:bg-[#657EF8] selection:text-white">
+    <div className="min-h-screen overflow-x-clip text-[#EEF1FA] pb-28 md:pb-12 selection:bg-[#657EF8] selection:text-white">
       <Toast toast={toast} />
       {userPrefs.showStickers !== false && <FloatingStickerLayer />}
       {userPrefs.showMascot !== false && (
@@ -867,7 +991,6 @@ export default function App() {
           }
         }}
         voterName={voterName}
-        avatarBadge={userPrefs.avatarBadge}
         avatarPhoto={userPrefs.avatarPhoto}
         onOpenVoterModal={openVoterModal}
         onOpenThemeModal={() => setThemeModalOpen(true)}
@@ -899,7 +1022,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="relative z-10 max-w-5xl mx-auto px-3.5 sm:px-4 pt-4 sm:pt-5 space-y-6">
+      <main className="relative z-10 max-w-5xl mx-auto px-3 sm:px-4 pt-4 sm:pt-5 space-y-6 min-w-0">
         {activeTab === 'inicio' && (
           <HomeTab
             config={config}
@@ -916,7 +1039,6 @@ export default function App() {
             stopVotesCount={stopVotes.length}
             uniqueVotersCount={uniqueVoters.length}
             voterName={voterName}
-            avatarBadge={userPrefs.avatarBadge}
             avatarPhoto={userPrefs.avatarPhoto}
             setActiveTab={setActiveTab}
             onJumpToDay={(date) => {
@@ -940,12 +1062,19 @@ export default function App() {
             attractions={attractions}
             stopVotes={stopVotes}
             voterName={voterName}
-            avatarBadge={userPrefs.avatarBadge}
             avatarPhoto={userPrefs.avatarPhoto}
+            userProfiles={userProfiles}
             compactCards={userPrefs.compactCards}
+            hiddenOfficialCount={hiddenOfficialCount}
             onOpenVoterModal={openVoterModal}
             onVoteClick={handleVoteClick}
             onSelectAttraction={setSelectedAttraction}
+            onOpenAddPersonalStop={() =>
+              setPersonalStopModal({ open: true, attractionId: null })
+            }
+            onHideOfficialStop={handleHideOfficialStop}
+            onRemovePersonalStop={handleRemovePersonalStop}
+            onRestoreOfficialStops={handleRestoreOfficialStops}
           />
         )}
 
@@ -967,12 +1096,23 @@ export default function App() {
             excludedAttractions={excludedAttractions}
             placeLikes={placeLikes}
             voterName={voterName}
-            avatarBadge={userPrefs.avatarBadge}
             avatarPhoto={userPrefs.avatarPhoto}
+            userProfiles={userProfiles}
             peoplePerCar={peoplePerCar}
             compactCards={userPrefs.compactCards}
-            onOpenAddPlace={() => setAddPlaceModalOpen(true)}
+            isAdminAuthenticated={isAdminAuthenticated}
+            onOpenAddPlace={() => {
+              setNewPlaceForm((prev) => ({
+                ...prev,
+                targetDayDate: currentDay.date,
+              }));
+              setAddPlaceModalOpen(true);
+            }}
             onTogglePlaceLike={handleTogglePlaceLike}
+            onAddToPersonalRoute={(attrId) =>
+              setPersonalStopModal({ open: true, attractionId: attrId })
+            }
+            onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
             onSelectAttraction={setSelectedAttraction}
           />
         )}
@@ -1008,6 +1148,9 @@ export default function App() {
             setChecklist={setChecklist}
             stopVotes={stopVotes}
             placeLikes={placeLikes}
+            userProfiles={userProfiles}
+            voterName={voterName}
+            avatarPhoto={userPrefs.avatarPhoto}
             isAdminAuthenticated={isAdminAuthenticated}
             setIsAdminAuthenticated={setIsAdminAuthenticated}
             pinInput={pinInput}
@@ -1064,7 +1207,27 @@ export default function App() {
         setForm={setNewPlaceForm}
         regionsList={regionsList}
         categoriesList={CATEGORIES_LIST}
+        days={days}
         onSubmit={handleCreateCustomPlace}
+      />
+
+      <AddPersonalStopModal
+        open={personalStopModal.open}
+        onClose={() => setPersonalStopModal({ open: false, attractionId: null })}
+        days={days}
+        defaultDate={currentDay.date}
+        attractions={attractions}
+        preselectedAttractionId={personalStopModal.attractionId}
+        onAddStop={handleAddPersonalStop}
+        onOpenNewPlaceModal={(targetDate, targetShift) => {
+          setNewPlaceForm((prev) => ({
+            ...prev,
+            addToPersonalRoute: true,
+            targetDayDate: targetDate,
+            targetShift,
+          }));
+          setAddPlaceModalOpen(true);
+        }}
       />
 
       <VoterNameModal
@@ -1079,14 +1242,13 @@ export default function App() {
         }
         voterNameInput={voterNameInput}
         setVoterNameInput={setVoterNameInput}
-        avatarBadge={userPrefs.avatarBadge}
-        setAvatarBadge={(badge) =>
-          setUserPrefs((prev) => ({ ...prev, avatarBadge: badge }))
-        }
         avatarPhoto={userPrefs.avatarPhoto}
-        setAvatarPhoto={(photo) =>
-          setUserPrefs((prev) => ({ ...prev, avatarPhoto: photo }))
-        }
+        setAvatarPhoto={(photo) => {
+          setUserPrefs((prev) => ({ ...prev, avatarPhoto: photo }));
+          if (voterName.trim()) {
+            syncUserProfileToCloud(voterName, photo);
+          }
+        }}
         onSubmit={handleConfirmVoterName}
       />
 
@@ -1104,8 +1266,15 @@ export default function App() {
         onClose={() => setSelectedAttraction(null)}
         placeLikes={placeLikes}
         voterName={voterName}
+        avatarPhoto={userPrefs.avatarPhoto}
+        userProfiles={userProfiles}
         peoplePerCar={peoplePerCar}
+        isAdminAuthenticated={isAdminAuthenticated}
         onTogglePlaceLike={handleTogglePlaceLike}
+        onAddToPersonalRoute={(attrId) =>
+          setPersonalStopModal({ open: true, attractionId: attrId })
+        }
+        onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
       />
     </div>
   );

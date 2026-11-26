@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { generateAppIconDataUrl } from '../lib/pwa';
 import type { BeforeInstallPromptEvent } from '../types';
 
 export function usePwa(showToast: (msg: string, type?: 'success' | 'info') => void) {
@@ -17,7 +16,7 @@ export function usePwa(showToast: (msg: string, type?: 'success' | 'info') => vo
       Boolean((window.navigator as unknown as { standalone?: boolean }).standalone);
     setIsStandaloneApp(standaloneMatch);
 
-    setAppIconUrl(generateAppIconDataUrl() || '/icon-192.png');
+    setAppIconUrl('/icon-192.png');
 
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();

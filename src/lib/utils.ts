@@ -120,10 +120,10 @@ export function unpackDeviceToken(raw?: string): {
 }
 
 /**
- * Redimensiona e recorta (quadrado central) uma foto de perfil para Data URL leve (~4–8 KB),
- * ideal para salvar no localStorage e exibir no app sem pesar.
+ * Redimensiona e recorta (quadrado central) uma foto de perfil para Data URL leve (~2–4 KB),
+ * ideal para salvar no localStorage e sincronizar com o grupo no Supabase.
  */
-export function compressAvatarImage(file: File, size = 128): Promise<string> {
+export function compressAvatarImage(file: File, size = 96, quality = 0.72): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
@@ -144,7 +144,7 @@ export function compressAvatarImage(file: File, size = 128): Promise<string> {
           return;
         }
         ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.src = String(reader.result || '');
     };

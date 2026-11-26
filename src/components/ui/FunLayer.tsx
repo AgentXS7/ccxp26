@@ -1,6 +1,8 @@
+import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import type { TabKey } from '../../types';
+import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from './AnimeDecor';
 import {
   BobaSticker,
   CarSticker,
@@ -121,29 +123,34 @@ const TAB_MASCOT: Record<TabKey, MascotId> = {
   admin: 'gamer',
 };
 
-const TIPS: Record<TabKey, string[]> = {
+const TIPS: Record<TabKey, React.ReactNode[]> = {
   inicio: [
     'Bem-vindo à expedição SP 2026! Instala o app na tela inicial pra abrir até sem internet no metrô. ✨',
-    'Toca no 🎨 lá em cima pra escolher sua cor e seu ícone de viajante!',
+    'Toca no 🎨 lá em cima pra escolher a cor do tema e colocar sua foto de perfil!',
     'Mil anos estudando magia e ainda me perco na Paulista… ainda bem que tem o roteiro. 🗺️',
   ],
   roteiro: [
-    'Vota 👍 ou 👎 em cada parada — o grupo decide junto!',
+    <>
+      Vota <AnimeLikeIcon className="w-3.5 h-3.5" /> ou{' '}
+      <AnimeDislikeIcon className="w-3.5 h-3.5" /> em cada parada — o grupo decide junto!
+    </>,
     'Na CCXP, chegar cedo = mais brindes. Confia na maga. 🎁',
     'Dica de expedição: Bilhete Único carregado poupa fila na catraca. 🚇',
   ],
   explorar: [
-    'Dá ❤️ nos lugares que você quer muito ir! Eu já curti todos os de lámen. 🍜',
+    <>
+      Dá <AnimeHeartIcon className="w-3.5 h-3.5" /> nos lugares que você quer muito ir! Eu já curti todos os de lámen. 🍜
+    </>,
     'Viu um lugar legal? Toca em “Adicionar Lugar” e mostra pro grupo!',
     'Liberdade à noite = lámen + boba + fotos. Missão aceita? 🧋',
   ],
   custos: [
     'Rachar o Uber em 4 é o combo mais eficiente de XP por real gasto. 🚗',
-    'Itens “A confirmar” ainda não entram na conta — fica de olho!',
+    'Itens “A confirmar” ainda não entram na conta — toque neles para colocar o seu valor!',
     'Economizou no transporte? Gasta em gacha… digo, em brinde da CCXP. 🎮',
   ],
   admin: [
-    'Área do organizador! O PIN protege as edições do roteiro. 🛡️',
+    'Área do organizador! O PIN protege as edições oficiais do roteiro. 🛡️',
     'Conectou o Supabase? O status “Nuvem” fica verde lá em cima. ☁️',
   ],
 };
@@ -180,7 +187,7 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
 
   return (
     <div
-      className="fixed right-3 sm:right-5 z-30 bottom-[calc(5.4rem+env(safe-area-inset-bottom))] md:bottom-6 flex items-end gap-2 pointer-events-none"
+      className="fixed right-2.5 sm:right-5 z-30 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] md:bottom-6 flex items-end gap-2 pointer-events-none"
     >
       {open && (
         <div
@@ -227,7 +234,7 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
           setOpen(true);
         }}
         aria-label={`Falar com ${mascot.name}, mascote do app`}
-        className="pointer-events-auto relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 animate-mascot-bob active:scale-95 transition"
+        className="pointer-events-auto relative w-14 h-14 sm:w-20 sm:h-20 shrink-0 animate-mascot-bob active:scale-95 transition"
       >
         {!imgFailed[mascotId] ? (
           <img

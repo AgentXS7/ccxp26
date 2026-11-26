@@ -1,6 +1,6 @@
 import type React from 'react';
 import { Check, Palette, Sparkles, X } from 'lucide-react';
-import { AVATAR_BADGES, THEME_PRESETS } from '../../lib/theme';
+import { THEME_PRESETS } from '../../lib/theme';
 import type { UserPreferences } from '../../types';
 import { HoyoDialog } from '../ui/HoyoDialog';
 import { UserAvatar } from '../ui/UserAvatar';
@@ -29,47 +29,45 @@ export function ThemePersonalizeModal({
       ariaLabelledBy="themeDialogTitle"
       maxWidthClass="sm:max-w-md"
     >
-      <div className="p-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
+      <div className="p-5 sm:p-6 pb-8 sm:pb-6 space-y-5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
             <h3
               id="themeDialogTitle"
               className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2"
             >
-              <Palette className="w-5 h-5 text-[#E5B869]" />
-              Personalizar App no Celular
+              <Palette className="w-5 h-5 text-[#E5B869] shrink-0" />
+              <span className="truncate">Personalizar App no Celular</span>
             </h3>
             <p className="text-xs text-[#9BA3C2]">
-              Suas escolhas ficam salvas só no seu aparelho.
+              Tema e preferências visuais ficam salvos só no seu aparelho.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="text-[#9BA3C2] hover:text-white p-1.5 rounded-xl bg-[#212847]"
+            className="text-[#9BA3C2] hover:text-white p-1.5 rounded-xl bg-[#212847] shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Perfil rápido */}
+        {/* Perfil rápido (Foto + Nome visíveis para o grupo) */}
         <div className="rounded-2xl hoyo-card-inner p-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="w-10 h-10 rounded-full bg-[#212847] border border-[#E5B869]/40 flex items-center justify-center overflow-hidden shrink-0">
-              <UserAvatar
-                photo={prefs.avatarPhoto}
-                badge={prefs.avatarBadge}
-                sizeClass="w-10 h-10"
-                textClass="text-lg"
-              />
-            </span>
+            <UserAvatar
+              photo={prefs.avatarPhoto}
+              name={voterName}
+              sizeClass="w-10 h-10"
+              textClass="text-sm"
+            />
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate">
                 {voterName.trim() ? voterName : 'Nome ainda não definido'}
               </p>
-              <p className="text-[11px] text-[#9BA3C2]">
-                Foto opcional, ícone e nome nos votos
+              <p className="text-[11px] text-[#9BA3C2] truncate">
+                Foto de perfil (visível ao grupo) e nome
               </p>
             </div>
           </div>
@@ -85,28 +83,7 @@ export function ThemePersonalizeModal({
           </button>
         </div>
 
-        {/* Ícone do Viajante */}
-        <div className="space-y-2">
-          <span className="text-xs font-bold text-[#CBD2EC] block">Seu Ícone</span>
-          <div className="flex flex-wrap gap-2">
-            {AVATAR_BADGES.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => setPrefs((p) => ({ ...p, avatarBadge: emoji }))}
-                className={`w-10 h-10 rounded-xl text-lg flex items-center justify-center border transition ${
-                  prefs.avatarBadge === emoji
-                    ? 'hoyo-accent-pill border-[#E5B869] scale-105'
-                    : 'hoyo-card-inner hover:border-[#8596D6]/45'
-                }`}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Paleta estilo HoYoLAB */}
+        {/* Paleta estilo Anime & Jogos */}
         <div className="space-y-2">
           <span className="text-xs font-bold text-[#CBD2EC] flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[#E5B869]" />

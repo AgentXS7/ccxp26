@@ -36,8 +36,8 @@ export type ThemePresetId = 'hoyolab' | 'geo' | 'anemo' | 'pyro' | 'electro' | '
 export interface UserPreferences {
   themePreset: ThemePresetId;
   compactCards: boolean;
-  avatarBadge: string;
-  /** Foto de perfil opcional em Data URL compactada (salva no aparelho) */
+  avatarBadge?: string;
+  /** Foto de perfil opcional em Data URL compactada (sincronizada para o grupo) */
   avatarPhoto?: string;
   /** Mostrar mascote no canto (padrão: true) */
   showMascot?: boolean;
@@ -106,6 +106,14 @@ export interface ItineraryStop {
   transitTip?: string;
   details: string;
   isMandatory?: boolean;
+  isPersonal?: boolean;
+}
+
+export interface PersonalItineraryState {
+  /** IDs de paradas oficiais não obrigatórias ocultadas pelo usuário no próprio roteiro */
+  hiddenStopIds: string[];
+  /** Paradas pessoais adicionadas pelo usuário (puxadas do Explorar ou criadas) */
+  addedStops: ItineraryStop[];
 }
 
 export interface ItineraryDay {

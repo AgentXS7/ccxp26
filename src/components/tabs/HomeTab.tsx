@@ -50,7 +50,6 @@ interface HomeTabProps {
   stopVotesCount: number;
   uniqueVotersCount: number;
   voterName: string;
-  avatarBadge: string;
   avatarPhoto?: string;
   setActiveTab: (tab: TabKey) => void;
   onJumpToDay: (date: string) => void;
@@ -169,7 +168,6 @@ export function HomeTab({
   stopVotesCount,
   uniqueVotersCount,
   voterName,
-  avatarBadge,
   avatarPhoto,
   setActiveTab,
   onJumpToDay,
@@ -551,9 +549,9 @@ export function HomeTab({
             <div className="relative w-11 h-11 rounded-2xl bg-[#1F2747] border border-[#E5B869]/45 flex items-center justify-center shrink-0 shadow-inner">
               <UserAvatar
                 photo={avatarPhoto}
-                badge={avatarBadge}
+                name={voterName}
                 sizeClass="w-9 h-9"
-                textClass="text-xl"
+                textClass="text-sm"
               />
               <StarSparkleIcon className="w-3 h-3 text-[#E5B869] absolute -top-1 -right-1" />
             </div>
@@ -569,7 +567,7 @@ export function HomeTab({
                 </span>
               </div>
               <p className="text-[11px] text-[#9BA3C2] truncate">
-                Cor do tema, densidade compacta e seu ícone nos votos.
+                Cor do tema, densidade compacta e sua foto no grupo.
               </p>
             </div>
           </div>

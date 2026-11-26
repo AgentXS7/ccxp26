@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useState } from 'react';
 import { Camera, Trash2, X } from 'lucide-react';
-import { AVATAR_BADGES } from '../../lib/theme';
 import { compressAvatarImage } from '../../lib/utils';
 import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from '../ui/AnimeDecor';
 import { HoyoDialog } from '../ui/HoyoDialog';
@@ -12,8 +11,6 @@ interface VoterNameModalProps {
   onClose: () => void;
   voterNameInput: string;
   setVoterNameInput: (v: string) => void;
-  avatarBadge: string;
-  setAvatarBadge: (badge: string) => void;
   avatarPhoto?: string;
   setAvatarPhoto: (photo: string | undefined) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -24,8 +21,6 @@ export function VoterNameModal({
   onClose,
   voterNameInput,
   setVoterNameInput,
-  avatarBadge,
-  setAvatarBadge,
   avatarPhoto,
   setAvatarPhoto,
   onSubmit,
@@ -38,7 +33,7 @@ export function VoterNameModal({
     if (!file) return;
     setPhotoError('');
     try {
-      const compressed = await compressAvatarImage(file, 128);
+      const compressed = await compressAvatarImage(file, 96, 0.72);
       setAvatarPhoto(compressed);
     } catch {
       setPhotoError('Não deu para carregar essa imagem. Tente outra foto.');
@@ -52,13 +47,18 @@ export function VoterNameModal({
       ariaLabelledBy="voterDialogTitle"
       maxWidthClass="sm:max-w-sm"
     >
-      <div className="p-6 space-y-4">
+      <div className="p-5 sm:p-6 pb-8 sm:pb-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3
             id="voterDialogTitle"
             className="text-base font-extrabold text-white flex items-center gap-2"
           >
-            <UserAvatar photo={avatarPhoto} badge={avatarBadge} sizeClass="w-6 h-6" textClass="text-lg" />
+            <UserAvatar
+              photo={avatarPhoto}
+              name={voterNameInput}
+              sizeClass="w-7 h-7"
+              textClass="text-xs"
+            />
             <span>Seu Perfil no App</span>
           </h3>
           <button
@@ -74,25 +74,23 @@ export function VoterNameModal({
         <p className="text-xs text-[#9BA3C2] leading-relaxed">
           Só precisa do seu <strong className="text-white">nome</strong> para votar (
           <AnimeLikeIcon className="w-3.5 h-3.5" /> / <AnimeDislikeIcon className="w-3.5 h-3.5" />) e curtir lugares (
-          <AnimeHeartIcon className="w-3.5 h-3.5" />). A foto de perfil é opcional!
+          <AnimeHeartIcon className="w-3.5 h-3.5" />). A foto é opcional e aparece para todo o grupo!
         </p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           {/* Foto de Perfil Opcional */}
-          <div className="rounded-2xl hoyo-card-inner p-3 flex items-center justify-between gap-3">
+          <div className="rounded-2xl hoyo-card-inner p-3.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-full bg-[#1F2747] border border-[#E5B869]/45 flex items-center justify-center overflow-hidden shrink-0">
-                <UserAvatar
-                  photo={avatarPhoto}
-                  badge={avatarBadge}
-                  sizeClass="w-12 h-12"
-                  textClass="text-2xl"
-                />
-              </div>
+              <UserAvatar
+                photo={avatarPhoto}
+                name={voterNameInput}
+                sizeClass="w-12 h-12"
+                textClass="text-lg"
+              />
               <div className="min-w-0">
                 <p className="text-xs font-bold text-white">Foto de perfil</p>
                 <p className="text-[11px] text-[#9BA3C2]">
-                  {avatarPhoto ? 'Usando sua foto' : 'Opcional (ou use um ícone)'}
+                  {avatarPhoto ? 'Visível para todo o grupo' : 'Opcional (senão usa sua inicial)'}
                 </p>
               </div>
             </div>
@@ -113,7 +111,7 @@ export function VoterNameModal({
                 <button
                   type="button"
                   onClick={() => setAvatarPhoto(undefined)}
-                  title="Remover foto e voltar para o ícone"
+                  title="Remover foto"
                   aria-label="Remover foto"
                   className="p-1.5 rounded-xl bg-[#EC6B6B]/15 border border-[#EC6B6B]/35 text-[#FFB5B5] hover:bg-[#EC6B6B]/25 transition"
                 >
@@ -127,32 +125,12 @@ export function VoterNameModal({
             <p className="text-[11px] text-[#FFB5B5] font-medium">{photoError}</p>
           )}
 
-          {/* Ícone (fallback ou preferência) */}
-          <div>
-            <span className="block text-[11px] font-bold text-[#CBD2EC] mb-1.5">
-              Ícone nos votos (aparece para todo o grupo):
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {AVATAR_BADGES.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => setAvatarBadge(emoji)}
-                  className={`w-9 h-9 rounded-xl text-base flex items-center justify-center border transition ${
-                    avatarBadge === emoji
-                      ? 'hoyo-accent-pill border-[#E5B869] scale-105'
-                      : 'hoyo-card-inner hover:border-[#8596D6]/40'
-                  }`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Nome Obrigatório */}
           <div>
-            <label htmlFor="voterNameInput" className="block text-[11px] font-bold text-[#CBD2EC] mb-1.5">
+            <label
+              htmlFor="voterNameInput"
+              className="block text-[11px] font-bold text-[#CBD2EC] mb-1.5"
+            >
               Seu nome ou apelido <span className="text-[#EC6B6B]">*</span>
             </label>
             <input

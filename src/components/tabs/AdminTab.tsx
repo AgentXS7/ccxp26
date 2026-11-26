@@ -26,6 +26,8 @@ import type {
   StopVoteEntry,
   TripConfig,
 } from '../../types';
+import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from '../ui/AnimeDecor';
+import { UserAvatar } from '../ui/UserAvatar';
 
 export type AdminSectionKey = 'rsvps' | 'custos' | 'reservas' | 'roteiro' | 'supabase';
 
@@ -42,6 +44,9 @@ interface AdminTabProps {
   setChecklist: React.Dispatch<React.SetStateAction<ChecklistItem[]>>;
   stopVotes: StopVoteEntry[];
   placeLikes: PlaceLikeEntry[];
+  userProfiles: Record<string, string>;
+  voterName: string;
+  avatarPhoto?: string;
   isAdminAuthenticated: boolean;
   setIsAdminAuthenticated: (v: boolean) => void;
   pinInput: string;
@@ -108,6 +113,9 @@ export function AdminTab({
   setChecklist,
   stopVotes,
   placeLikes,
+  userProfiles,
+  voterName,
+  avatarPhoto,
   isAdminAuthenticated,
   setIsAdminAuthenticated,
   pinInput,
@@ -241,8 +249,9 @@ export function AdminTab({
         <div className="space-y-4">
           <div className="rounded-3xl hoyo-card p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">
-                Locais Mais Curtidos no Explorar (❤️)
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span>Locais Mais Curtidos no Explorar</span>
+                <AnimeHeartIcon className="w-4 h-4" />
               </h3>
               <span className="text-xs font-bold bg-[#EC6B6B]/18 text-[#FFD0D0] px-2.5 py-1 rounded-lg">
                 {placeLikes.length} curtidas
@@ -251,7 +260,8 @@ export function AdminTab({
 
             {placeLikes.length === 0 ? (
               <p className="text-xs text-[#9BA3C2] py-2">
-                Nenhuma curtida registrada ainda. Abra a aba Explorar e clique em ❤️ nos lugares favoritos!
+                Nenhuma curtida registrada ainda. Abra a aba Explorar e clique em{' '}
+                <AnimeHeartIcon className="w-3.5 h-3.5" /> nos lugares favoritos!
               </p>
             ) : (
               <div className="space-y-2">
@@ -266,17 +276,34 @@ export function AdminTab({
                     const likers = placeLikes
                       .filter((l) => l.attractionId === a.id)
                       .map((l) => l.voterName);
+                    const normalizedMe = voterName.trim().toLowerCase();
                     return (
                       <div
                         key={a.id}
                         className="rounded-2xl hoyo-card-inner p-3.5 flex items-center justify-between gap-2"
                       >
-                        <div>
+                        <div className="min-w-0 space-y-1">
                           <p className="text-xs sm:text-sm font-bold text-white">{a.name}</p>
-                          <p className="text-xs text-[#F7A3A3] mt-0.5">❤️ {likers.join(', ')}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#F7A3A3]">
+                            <AnimeHeartIcon className="w-3.5 h-3.5" />
+                            {likers.map((name) => {
+                              const k = name.trim().toLowerCase();
+                              const p = k === normalizedMe && avatarPhoto ? avatarPhoto : userProfiles[k];
+                              return (
+                                <span
+                                  key={name}
+                                  className="inline-flex items-center gap-1 bg-[#EC6B6B]/15 text-[#FFD0D0] px-2 py-0.5 rounded-full text-[11px]"
+                                >
+                                  <UserAvatar photo={p} name={name} sizeClass="w-3.5 h-3.5" textClass="text-[8px]" />
+                                  <span>{name}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <span className="text-xs font-extrabold bg-[#EC6B6B]/18 text-[#FFD0D0] px-2.5 py-1 rounded-lg shrink-0">
-                          {likers.length} ❤️
+                        <span className="inline-flex items-center gap-1 text-xs font-extrabold bg-[#EC6B6B]/18 text-[#FFD0D0] px-2.5 py-1 rounded-lg shrink-0">
+                          <span>{likers.length}</span>
+                          <AnimeHeartIcon className="w-3.5 h-3.5" />
                         </span>
                       </div>
                     );
@@ -287,22 +314,26 @@ export function AdminTab({
 
           <div className="rounded-3xl hoyo-card p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-base font-bold text-white">
-                Placar de Votos nas Atrações (👍 Sim / 👎 Não)
+              <h3 className="text-base font-bold text-white flex items-center gap-1.5 flex-wrap">
+                <span>Placar de Votos nas Atrações</span>
+                <span className="inline-flex items-center gap-1 text-xs font-normal text-[#9BA3C2]">
+                  (<AnimeLikeIcon className="w-3.5 h-3.5" /> Sim / <AnimeDislikeIcon className="w-3.5 h-3.5" /> Não)
+                </span>
               </h3>
               <div className="flex gap-2 text-xs font-bold">
-                <span className="bg-[#47C5B8]/15 text-[#8AE5DB] px-2.5 py-1 rounded-lg">
-                  👍 Sim: {stopVotes.filter((v) => v.choice === 'yes').length}
+                <span className="inline-flex items-center gap-1 bg-[#47C5B8]/15 text-[#8AE5DB] px-2.5 py-1 rounded-lg">
+                  <AnimeLikeIcon className="w-3.5 h-3.5" /> Sim: {stopVotes.filter((v) => v.choice === 'yes').length}
                 </span>
-                <span className="bg-[#EC6B6B]/18 text-[#FFD0D0] px-2.5 py-1 rounded-lg">
-                  👎 Não: {stopVotes.filter((v) => v.choice === 'no').length}
+                <span className="inline-flex items-center gap-1 bg-[#EC6B6B]/18 text-[#FFD0D0] px-2.5 py-1 rounded-lg">
+                  <AnimeDislikeIcon className="w-3.5 h-3.5" /> Não: {stopVotes.filter((v) => v.choice === 'no').length}
                 </span>
               </div>
             </div>
 
             {stopVotes.length === 0 ? (
               <p className="text-xs text-[#9BA3C2] py-2">
-                Nenhum voto registrado nas atrações ainda. Abra a aba Roteiro para votar com 👍 ou 👎.
+                Nenhum voto registrado nas atrações ainda. Abra a aba Roteiro para votar com{' '}
+                <AnimeLikeIcon className="w-3.5 h-3.5" /> ou <AnimeDislikeIcon className="w-3.5 h-3.5" />.
               </p>
             ) : (
               <div className="space-y-2.5">
@@ -322,18 +353,19 @@ export function AdminTab({
                           <span className="text-xs sm:text-sm font-bold text-white">
                             {s.dayDate.slice(8, 10)}/12 • {s.title}
                           </span>
-                          <span className="text-xs font-bold text-[#9BA3C2] shrink-0">
-                            👍 {yesList.length} • 👎 {noList.length}
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#9BA3C2] shrink-0">
+                            <AnimeLikeIcon className="w-3.5 h-3.5" /> {yesList.length} •{' '}
+                            <AnimeDislikeIcon className="w-3.5 h-3.5" /> {noList.length}
                           </span>
                         </div>
                         {yesList.length > 0 && (
-                          <p className="text-xs text-[#8AE5DB]">
-                            👍 Sim: {yesList.join(', ')}
+                          <p className="text-xs text-[#8AE5DB] flex items-center gap-1.5 flex-wrap">
+                            <AnimeLikeIcon className="w-3.5 h-3.5" /> Sim: {yesList.join(', ')}
                           </p>
                         )}
                         {noList.length > 0 && (
-                          <p className="text-xs text-[#F7A3A3]">
-                            👎 Não: {noList.join(', ')}
+                          <p className="text-xs text-[#F7A3A3] flex items-center gap-1.5 flex-wrap">
+                            <AnimeDislikeIcon className="w-3.5 h-3.5" /> Não: {noList.join(', ')}
                           </p>
                         )}
                       </div>

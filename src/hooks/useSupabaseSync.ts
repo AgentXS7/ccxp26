@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { INITIAL_ATTRACTIONS } from '../data/attractions';
 import { sbFetch } from '../lib/supabase';
-import { packDeviceTokenWithBadge, unpackDeviceToken } from '../lib/utils';
+import { packDeviceTokenWithBadge, slugifyName, unpackDeviceToken } from '../lib/utils';
 import type {
   AttractionMeta,
   BudgetItem,
@@ -28,6 +29,11 @@ interface UseSupabaseSyncParams {
   setStopVotes: React.Dispatch<React.SetStateAction<StopVoteEntry[]>>;
   placeLikes: PlaceLikeEntry[];
   setPlaceLikes: React.Dispatch<React.SetStateAction<PlaceLikeEntry[]>>;
+  setUserProfiles: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  removedPlaceIds: string[];
+  setRemovedPlaceIds: React.Dispatch<React.SetStateAction<string[]>>;
+  voterName: string;
+  avatarPhoto?: string;
   isAdminAuthenticated: boolean;
   showToast: (msg: string, type?: 'success' | 'info') => void;
 }
@@ -47,6 +53,11 @@ export function useSupabaseSync({
   setStopVotes,
   placeLikes,
   setPlaceLikes,
+  setUserProfiles,
+  removedPlaceIds,
+  setRemovedPlaceIds,
+  voterName,
+  avatarPhoto,
   isAdminAuthenticated,
   showToast,
 }: UseSupabaseSyncParams) {
@@ -146,18 +157,67 @@ export function useSupabaseSync({
           setPlaceLikes(Array.from(dedupedLikes.values()));
         }
 
-        if (Array.isArray(placesRows) && placesRows.length > 0) {
-          const cloudCustom: AttractionMeta[] = placesRows
-            .map((r: { payload?: AttractionMeta }) => r.payload)
-            .filter((p): p is AttractionMeta => Boolean(p && p.id && p.name));
+        if (Array.isArray(placesRows)) {
+          let nextRemovedIds: string[] = [];
+          const cloudProfiles: Record<string, string | null> = {};
+          const cloudCustom: AttractionMeta[] = [];
 
-          if (cloudCustom.length > 0) {
-            setAttractions((prev) => {
-              const byId = new Map(prev.map((a) => [a.id, a]));
-              cloudCustom.forEach((item) => byId.set(item.id, item));
-              return Array.from(byId.values());
+          placesRows.forEach((r: { id?: string; payload?: Record<string, unknown> }) => {
+            const id = String(r.id || '');
+            const payload = r.payload;
+            if (!payload) return;
+
+            if (id === 'sys_removed_places' && payload.kind === 'removed_places') {
+              if (Array.isArray(payload.ids)) {
+                nextRemovedIds = payload.ids.map(String);
+              }
+              return;
+            }
+
+            if (id.startsWith('sys_profile_') && payload.kind === 'user_profile') {
+              const pName = typeof payload.voterName === 'string' ? payload.voterName.trim().toLowerCase() : '';
+              if (pName) {
+                cloudProfiles[pName] =
+                  typeof payload.avatarPhoto === 'string' && payload.avatarPhoto
+                    ? payload.avatarPhoto
+                    : null;
+              }
+              return;
+            }
+
+            if (!id.startsWith('sys_')) {
+              const attr = payload as unknown as AttractionMeta;
+              if (attr && attr.id && attr.name) {
+                cloudCustom.push(attr);
+              }
+            }
+          });
+
+          setRemovedPlaceIds(nextRemovedIds);
+          const removedSet = new Set(nextRemovedIds);
+
+          if (Object.keys(cloudProfiles).length > 0) {
+            setUserProfiles((prev) => {
+              const next = { ...prev };
+              Object.entries(cloudProfiles).forEach(([k, val]) => {
+                if (val) next[k] = val;
+                else delete next[k];
+              });
+              return next;
             });
           }
+
+          setAttractions(() => {
+            const baseList = INITIAL_ATTRACTIONS.filter((a) => !removedSet.has(a.id));
+            const byId = new Map<string, AttractionMeta>();
+            cloudCustom
+              .filter((c) => !removedSet.has(c.id))
+              .forEach((item) => byId.set(item.id, item));
+            baseList.forEach((item) => {
+              if (!byId.has(item.id)) byId.set(item.id, item);
+            });
+            return Array.from(byId.values());
+          });
         }
 
         if (Array.isArray(sharedRows) && sharedRows.length > 0) {
@@ -214,7 +274,93 @@ export function useSupabaseSync({
       setBudgetItems,
       setStops,
       setConfig,
+      setUserProfiles,
+      setRemovedPlaceIds,
     ]
+  );
+
+  const syncUserProfileToCloud = useCallback(
+    async (personName: string, photo?: string) => {
+      const cleanName = personName.trim();
+      if (!cleanName) return;
+      const key = cleanName.toLowerCase();
+
+      setUserProfiles((prev) => {
+        const next = { ...prev };
+        if (photo) next[key] = photo;
+        else delete next[key];
+        return next;
+      });
+
+      if (!hasSupabase) return;
+      try {
+        await cloudFetch('custom_places?on_conflict=id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            id: `sys_profile_${slugifyName(cleanName)}`,
+            payload: {
+              kind: 'user_profile',
+              voterName: cleanName,
+              avatarPhoto: photo || null,
+              updatedAt: new Date().toISOString(),
+            },
+            created_at: new Date().toISOString(),
+          }),
+        });
+      } catch {
+        // Falha silenciosa — será tentado novamente ao salvar/sincronizar
+      }
+    },
+    [hasSupabase, cloudFetch, setUserProfiles]
+  );
+
+  const deletePlaceAsAdmin = useCallback(
+    async (attr: AttractionMeta) => {
+      setAttractions((prev) => prev.filter((a) => a.id !== attr.id));
+
+      if (attr.id.startsWith('place_custom_')) {
+        if (hasSupabase) {
+          try {
+            await cloudFetch(`custom_places?id=eq.${encodeURIComponent(attr.id)}`, {
+              method: 'DELETE',
+            });
+            setSyncStatus('synced');
+            setSyncErrorDetail('');
+          } catch (err) {
+            setSyncStatus('error');
+            setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao remover lugar');
+          }
+        }
+        return;
+      }
+
+      const nextRemoved = Array.from(new Set([...removedPlaceIds, attr.id]));
+      setRemovedPlaceIds(nextRemoved);
+      if (hasSupabase) {
+        try {
+          await cloudFetch('custom_places?on_conflict=id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({
+              id: 'sys_removed_places',
+              payload: {
+                kind: 'removed_places',
+                ids: nextRemoved,
+                updatedAt: new Date().toISOString(),
+              },
+              created_at: new Date().toISOString(),
+            }),
+          });
+          setSyncStatus('synced');
+          setSyncErrorDetail('');
+        } catch (err) {
+          setSyncStatus('error');
+          setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao remover lugar');
+        }
+      }
+    },
+    [hasSupabase, cloudFetch, removedPlaceIds, setAttractions, setRemovedPlaceIds]
   );
 
   // Sincronização automática ao abrir, ao focar e a cada 8 segundos
@@ -335,6 +481,9 @@ export function useSupabaseSync({
       }
 
       await pushSharedStateToCloud();
+      if (voterName.trim() && avatarPhoto) {
+        await syncUserProfileToCloud(voterName, avatarPhoto);
+      }
       await syncFromCloud(true);
       showToast(
         'Conectado! Agora use o botão "Copiar Link" ou "WhatsApp" para mandar ao grupo.'
@@ -359,5 +508,7 @@ export function useSupabaseSync({
     cloudFetch,
     syncFromCloud,
     pushAllLocalToCloud,
+    syncUserProfileToCloud,
+    deletePlaceAsAdmin,
   };
 }

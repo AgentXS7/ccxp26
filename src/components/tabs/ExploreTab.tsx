@@ -1,10 +1,10 @@
 import type React from 'react';
-import { Plus, Search, Star } from 'lucide-react';
+import { CalendarPlus, Plus, Search, Star, Trash2 } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
+import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 import { AnimeHeartIcon, CornerOrnaments, StarSparkleIcon } from '../ui/AnimeDecor';
 import { PixelGhostSticker } from '../ui/GameStickers';
 import { UserAvatar } from '../ui/UserAvatar';
-import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 
 interface ExploreTabProps {
   exploreQuery: string;
@@ -23,12 +23,15 @@ interface ExploreTabProps {
   excludedAttractions: AttractionMeta[];
   placeLikes: PlaceLikeEntry[];
   voterName: string;
-  avatarBadge: string;
   avatarPhoto?: string;
+  userProfiles: Record<string, string>;
   peoplePerCar: number;
   compactCards: boolean;
+  isAdminAuthenticated: boolean;
   onOpenAddPlace: () => void;
   onTogglePlaceLike: (e: React.MouseEvent, attractionId: string) => void;
+  onAddToPersonalRoute: (attractionId: string) => void;
+  onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
   onSelectAttraction: (attr: AttractionMeta) => void;
 }
 
@@ -49,32 +52,41 @@ export function ExploreTab({
   excludedAttractions,
   placeLikes,
   voterName,
-  avatarBadge,
   avatarPhoto,
+  userProfiles,
   peoplePerCar,
   compactCards,
+  isAdminAuthenticated,
   onOpenAddPlace,
   onTogglePlaceLike,
+  onAddToPersonalRoute,
+  onDeletePlaceAsAdmin,
   onSelectAttraction,
 }: ExploreTabProps) {
   const normalizedMe = voterName.trim().toLowerCase();
+  const getPhoto = (name: string) => {
+    const k = name.trim().toLowerCase();
+    return k === normalizedMe && avatarPhoto ? avatarPhoto : userProfiles[k];
+  };
+
   return (
     <div className="space-y-5">
       {/* Cabeçalho & Filtros */}
-      <div className="relative rounded-3xl hoyo-card hoyo-gold-hairline hoyo-shimmer-top p-5 space-y-4">
+      <div className="relative rounded-3xl hoyo-card hoyo-gold-hairline hoyo-shimmer-top p-4 sm:p-5 space-y-4">
         <CornerOrnaments />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
               <StarSparkleIcon className="w-4 h-4 text-[#E5B869]" />
-              Explorar Locais & Favoritos do Grupo
+              Explorar Locais &amp; Favoritos do Grupo
             </h2>
             <p className="text-xs text-[#9BA3C2] mt-0.5">
               Dê{' '}
               <strong className="inline-flex items-center gap-1 text-[#F7A3A3]">
                 <AnimeHeartIcon className="w-3.5 h-3.5" /> coração
               </strong>{' '}
-              nos seus lugares preferidos (aparece quem curtiu!) ou adicione novos locais para o grupo ver.
+              nos preferidos, sugira novos locais ou toque em{' '}
+              <strong className="text-[#8AE5DB]">+ Roteiro</strong> para jogar no seu dia livre.
             </p>
           </div>
 
@@ -96,10 +108,7 @@ export function ExploreTab({
                   : 'hoyo-card-inner text-[#CBD2EC] hover:border-[#EC6B6B]/40'
               }`}
             >
-              <AnimeHeartIcon
-                filled={exploreOnlyLiked}
-                className="w-3.5 h-3.5"
-              />
+              <AnimeHeartIcon filled={exploreOnlyLiked} className="w-3.5 h-3.5" />
               Favoritos ({new Set(placeLikes.map((l) => l.attractionId)).size})
             </button>
 
@@ -185,10 +194,8 @@ export function ExploreTab({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {filteredAttractions.map((attr) => {
             const likesForPlace = placeLikes.filter((l) => l.attractionId === attr.id);
-            const isLikedByMe = voterName.trim()
-              ? likesForPlace.some(
-                  (l) => l.voterName.trim().toLowerCase() === voterName.trim().toLowerCase()
-                )
+            const isLikedByMe = normalizedMe
+              ? likesForPlace.some((l) => l.voterName.trim().toLowerCase() === normalizedMe)
               : false;
 
             return (
@@ -235,10 +242,7 @@ export function ExploreTab({
                           }`}
                           title="Curtir lugar preferido"
                         >
-                          <AnimeHeartIcon
-                            filled={isLikedByMe}
-                            className="w-4 h-4"
-                          />
+                          <AnimeHeartIcon filled={isLikedByMe} className="w-4 h-4" />
                           <span>{likesForPlace.length}</span>
                         </button>
                       </div>
@@ -275,43 +279,70 @@ export function ExploreTab({
                     {likesForPlace.length > 0 && (
                       <div className="mt-2.5 flex flex-wrap items-center gap-1 text-[11px]">
                         <AnimeHeartIcon className="w-3.5 h-3.5" />
-                        {likesForPlace.map((like) => {
-                          const isMe =
-                            Boolean(normalizedMe) &&
-                            like.voterName.trim().toLowerCase() === normalizedMe;
-                          const badge = isMe ? avatarBadge : like.avatarBadge;
-                          const photo = isMe ? avatarPhoto : undefined;
-                          return (
-                            <span
-                              key={like.id}
-                              className="inline-flex items-center gap-1 bg-[#EC6B6B]/15 text-[#FFD0D0] border border-[#EC6B6B]/25 px-2 py-0.5 rounded-full font-medium"
-                            >
-                              {(photo || badge) && (
-                                <UserAvatar
-                                  photo={photo}
-                                  badge={badge || ''}
-                                  sizeClass="w-4 h-4"
-                                  textClass="text-[11px]"
-                                />
-                              )}
-                              <span>{like.voterName}</span>
-                            </span>
-                          );
-                        })}
+                        {likesForPlace.map((like) => (
+                          <span
+                            key={like.id}
+                            className="inline-flex items-center gap-1 bg-[#EC6B6B]/15 text-[#FFD0D0] border border-[#EC6B6B]/25 px-2 py-0.5 rounded-full font-medium"
+                          >
+                            <UserAvatar
+                              photo={getPhoto(like.voterName)}
+                              name={like.voterName}
+                              sizeClass="w-4 h-4"
+                              textClass="text-[9px]"
+                            />
+                            <span>{like.voterName}</span>
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="px-4 py-2.5 border-t border-[#8596D6]/15 flex items-center justify-between text-xs text-[#9BA3C2]">
-                  <span>
+                <div className="px-4 py-2.5 border-t border-[#8596D6]/15 flex flex-wrap items-center justify-between gap-2 text-xs text-[#9BA3C2]">
+                  <span className="truncate">
                     {attr.distanceKm > 0
                       ? `${attr.distanceKm} km da base • Uber ~${formatBRL(
                           attr.uberAvg / Math.max(1, peoplePerCar)
                         )}/p`
                       : 'São Paulo • Clique para detalhes'}
                   </span>
-                  <span className="text-[#8CA0FF] font-semibold">Ficha →</span>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddToPersonalRoute(attr.id);
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg hoyo-accent-pill border hover:border-[#E5B869]/60 transition"
+                      title="Adicionar no seu roteiro pessoal"
+                    >
+                      <CalendarPlus className="w-3 h-3" />
+                      <span>+ Roteiro</span>
+                    </button>
+
+                    {isAdminAuthenticated && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            window.confirm(
+                              `Remover "${attr.name}" do Explorar para todo o grupo?`
+                            )
+                          ) {
+                            onDeletePlaceAsAdmin(attr);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-[#EC6B6B]/18 border border-[#EC6B6B]/40 text-[#FFD0D0] hover:bg-[#EC6B6B]/30 transition"
+                        title="Remover lugar (somente Admin)"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+
+                    <span className="text-[#8CA0FF] font-semibold">Ficha →</span>
+                  </div>
                 </div>
               </div>
             );
