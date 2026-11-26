@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { INITIAL_ATTRACTIONS } from '../data/attractions';
 import { sbFetch } from '../lib/supabase';
 import { packDeviceTokenWithBadge, slugifyName, unpackDeviceToken } from '../lib/utils';
@@ -6,7 +6,10 @@ import type {
   AttractionMeta,
   BudgetItem,
   ChecklistItem,
+  GroupMemberId,
   ItineraryStop,
+  MemberCloudProfile,
+  OfflineQueueOp,
   PlaceLikeEntry,
   StopVoteEntry,
   TripConfig,
@@ -30,10 +33,19 @@ interface UseSupabaseSyncParams {
   placeLikes: PlaceLikeEntry[];
   setPlaceLikes: React.Dispatch<React.SetStateAction<PlaceLikeEntry[]>>;
   setUserProfiles: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  memberProfiles: Partial<Record<GroupMemberId, MemberCloudProfile>>;
+  setMemberProfiles: React.Dispatch<
+    React.SetStateAction<Partial<Record<GroupMemberId, MemberCloudProfile>>>
+  >;
+  offlineQueue: OfflineQueueOp[];
+  setOfflineQueue: React.Dispatch<React.SetStateAction<OfflineQueueOp[]>>;
   removedPlaceIds: string[];
   setRemovedPlaceIds: React.Dispatch<React.SetStateAction<string[]>>;
+  activeMemberId: GroupMemberId | null;
+  deviceToken: string;
   voterName: string;
   avatarPhoto?: string;
+  onRemoteActiveMemberSync?: (profile: MemberCloudProfile) => void;
   isAdminAuthenticated: boolean;
   showToast: (msg: string, type?: 'success' | 'info') => void;
 }
@@ -54,10 +66,17 @@ export function useSupabaseSync({
   placeLikes,
   setPlaceLikes,
   setUserProfiles,
+  memberProfiles,
+  setMemberProfiles,
+  offlineQueue,
+  setOfflineQueue,
   removedPlaceIds,
   setRemovedPlaceIds,
+  activeMemberId,
+  deviceToken,
   voterName,
   avatarPhoto,
+  onRemoteActiveMemberSync,
   isAdminAuthenticated,
   showToast,
 }: UseSupabaseSyncParams) {
@@ -74,11 +93,140 @@ export function useSupabaseSync({
   const [syncErrorDetail, setSyncErrorDetail] = useState<string>('');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
+  const offlineQueueRef = useRef(offlineQueue);
+  offlineQueueRef.current = offlineQueue;
+
+  const activeMemberIdRef = useRef(activeMemberId);
+  activeMemberIdRef.current = activeMemberId;
+
+  const onRemoteActiveMemberSyncRef = useRef(onRemoteActiveMemberSync);
+  onRemoteActiveMemberSyncRef.current = onRemoteActiveMemberSync;
+
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
+
   const cloudFetch = useCallback(
     (path: string, options: RequestInit = {}) =>
       sbFetch(cleanSbUrl, cleanSbKey, path, options),
     [cleanSbUrl, cleanSbKey]
   );
+
+  const enqueueOfflineOp = useCallback(
+    (op: OfflineQueueOp) => {
+      setOfflineQueue((prev) => {
+        const filtered = prev.filter((item) => item.key !== op.key);
+        return [...filtered, op];
+      });
+    },
+    [setOfflineQueue]
+  );
+
+  const executeSingleOp = useCallback(
+    async (op: OfflineQueueOp) => {
+      switch (op.type) {
+        case 'vote_upsert': {
+          const v = op.payload;
+          await cloudFetch('stop_votes?on_conflict=id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({
+              id: v.id,
+              stop_id: v.stopId,
+              voter_name: v.voterName,
+              choice: v.choice,
+              device_token: packDeviceTokenWithBadge(v.deviceToken, v.avatarBadge),
+              updated_at: v.updatedAt,
+            }),
+          });
+          return;
+        }
+        case 'vote_delete': {
+          await cloudFetch(`stop_votes?id=eq.${encodeURIComponent(op.payload.id)}`, {
+            method: 'DELETE',
+          });
+          return;
+        }
+        case 'like_upsert': {
+          const l = op.payload;
+          await cloudFetch('place_likes?on_conflict=id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({
+              id: l.id,
+              attraction_id: l.attractionId,
+              voter_name: l.voterName,
+              device_token: packDeviceTokenWithBadge(l.deviceToken, l.avatarBadge),
+              created_at: l.createdAt,
+            }),
+          });
+          return;
+        }
+        case 'like_delete': {
+          await cloudFetch(`place_likes?id=eq.${encodeURIComponent(op.payload.id)}`, {
+            method: 'DELETE',
+          });
+          return;
+        }
+        case 'place_upsert': {
+          const p = op.payload;
+          await cloudFetch('custom_places?on_conflict=id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({
+              id: p.id,
+              payload: p,
+              created_at: new Date().toISOString(),
+            }),
+          });
+          return;
+        }
+        case 'member_upsert': {
+          const m = op.payload;
+          await cloudFetch('custom_places?on_conflict=id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({
+              id: `sys_member_${m.memberId}`,
+              payload: m,
+              created_at: new Date().toISOString(),
+            }),
+          });
+          return;
+        }
+      }
+    },
+    [cloudFetch]
+  );
+
+  const flushOfflineQueue = useCallback(async (): Promise<boolean> => {
+    const snapshot = [...offlineQueueRef.current];
+    if (!hasSupabase || snapshot.length === 0) return true;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return false;
+    }
+
+    const succeededKeys = new Set<string>();
+    let allOk = true;
+
+    for (const op of snapshot) {
+      try {
+        await executeSingleOp(op);
+        succeededKeys.add(op.key);
+      } catch {
+        allOk = false;
+        break;
+      }
+    }
+
+    if (succeededKeys.size > 0) {
+      setOfflineQueue((prev) => prev.filter((item) => !succeededKeys.has(item.key)));
+      if (allOk) {
+        showToastRef.current('Alterações feitas offline foram sincronizadas!');
+      }
+    }
+
+    return allOk;
+  }, [hasSupabase, executeSingleOp, setOfflineQueue]);
 
   const syncFromCloud = useCallback(
     async (silent = true) => {
@@ -87,8 +235,22 @@ export function useSupabaseSync({
         setSyncErrorDetail('');
         return;
       }
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setSyncStatus('local');
+        return;
+      }
       if (!silent) setSyncStatus('syncing');
+
       try {
+        // 1. Sempre envia a fila offline ANTES de baixar da nuvem para nunca perder votos/gastos do metrô
+        if (offlineQueueRef.current.length > 0) {
+          const flushed = await flushOfflineQueue();
+          if (!flushed) {
+            setSyncStatus('local');
+            return;
+          }
+        }
+
         const [votesRows, likesRows, placesRows, sharedRows] = await Promise.all([
           cloudFetch('stop_votes?select=*'),
           cloudFetch('place_likes?select=*'),
@@ -160,6 +322,7 @@ export function useSupabaseSync({
         if (Array.isArray(placesRows)) {
           let nextRemovedIds: string[] = [];
           const cloudProfiles: Record<string, string | null> = {};
+          const cloudMembers: Partial<Record<GroupMemberId, MemberCloudProfile>> = {};
           const cloudCustom: AttractionMeta[] = [];
 
           placesRows.forEach((r: { id?: string; payload?: Record<string, unknown> }) => {
@@ -174,9 +337,22 @@ export function useSupabaseSync({
               return;
             }
 
+            if (id.startsWith('sys_member_') && payload.kind === 'member_profile') {
+              const mp = payload as unknown as MemberCloudProfile;
+              if (mp.memberId) {
+                cloudMembers[mp.memberId] = mp;
+                const nameKey = mp.name.trim().toLowerCase();
+                cloudProfiles[nameKey] = mp.avatarPhoto || null;
+              }
+              return;
+            }
+
             if (id.startsWith('sys_profile_') && payload.kind === 'user_profile') {
-              const pName = typeof payload.voterName === 'string' ? payload.voterName.trim().toLowerCase() : '';
-              if (pName) {
+              const pName =
+                typeof payload.voterName === 'string'
+                  ? payload.voterName.trim().toLowerCase()
+                  : '';
+              if (pName && cloudProfiles[pName] === undefined) {
                 cloudProfiles[pName] =
                   typeof payload.avatarPhoto === 'string' && payload.avatarPhoto
                     ? payload.avatarPhoto
@@ -195,6 +371,17 @@ export function useSupabaseSync({
 
           setRemovedPlaceIds(nextRemovedIds);
           const removedSet = new Set(nextRemovedIds);
+
+          if (Object.keys(cloudMembers).length > 0) {
+            setMemberProfiles((prev) => ({ ...prev, ...cloudMembers }));
+            const currentId = activeMemberIdRef.current;
+            if (currentId && cloudMembers[currentId]) {
+              const remoteProfile = cloudMembers[currentId]!;
+              if (remoteProfile.trustedDevices.includes(deviceToken)) {
+                onRemoteActiveMemberSyncRef.current?.(remoteProfile);
+              }
+            }
+          }
 
           if (Object.keys(cloudProfiles).length > 0) {
             setUserProfiles((prev) => {
@@ -260,13 +447,19 @@ export function useSupabaseSync({
           new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
         );
       } catch (err) {
-        setSyncStatus('error');
-        setSyncErrorDetail(err instanceof Error ? err.message : 'Falha de rede');
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          setSyncStatus('local');
+        } else {
+          setSyncStatus('error');
+          setSyncErrorDetail(err instanceof Error ? err.message : 'Falha de rede');
+        }
       }
     },
     [
       hasSupabase,
       cloudFetch,
+      flushOfflineQueue,
+      deviceToken,
       setStopVotes,
       setPlaceLikes,
       setAttractions,
@@ -275,8 +468,64 @@ export function useSupabaseSync({
       setStops,
       setConfig,
       setUserProfiles,
+      setMemberProfiles,
       setRemovedPlaceIds,
     ]
+  );
+
+  const upsertMemberProfile = useCallback(
+    async (profile: MemberCloudProfile) => {
+      setMemberProfiles((prev) => ({ ...prev, [profile.memberId]: profile }));
+      setUserProfiles((prev) => {
+        const next = { ...prev };
+        const key = profile.name.trim().toLowerCase();
+        if (profile.avatarPhoto) next[key] = profile.avatarPhoto;
+        else delete next[key];
+        return next;
+      });
+
+      if (!hasSupabase) return;
+
+      const queueOp: OfflineQueueOp = {
+        key: `member:${profile.memberId}`,
+        type: 'member_upsert',
+        payload: profile,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        enqueueOfflineOp(queueOp);
+        setSyncStatus('local');
+        return;
+      }
+
+      try {
+        await executeSingleOp(queueOp);
+        setSyncStatus('synced');
+        setSyncErrorDetail('');
+      } catch {
+        enqueueOfflineOp(queueOp);
+        setSyncStatus('local');
+      }
+    },
+    [hasSupabase, executeSingleOp, enqueueOfflineOp, setMemberProfiles, setUserProfiles]
+  );
+
+  const unlockMemberDevicesAsAdmin = useCallback(
+    async (memberId: GroupMemberId) => {
+      const existing = memberProfiles[memberId];
+      if (!existing) return;
+      const updated: MemberCloudProfile = {
+        ...existing,
+        trustedDevices: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertMemberProfile(updated);
+      showToastRef.current(
+        `Aparelho de ${existing.name} liberado! Dados, foto e gastos foram preservados.`
+      );
+    },
+    [memberProfiles, upsertMemberProfile]
   );
 
   const syncUserProfileToCloud = useCallback(
@@ -309,7 +558,7 @@ export function useSupabaseSync({
           }),
         });
       } catch {
-        // Falha silenciosa — será tentado novamente ao salvar/sincronizar
+        // Falha silenciosa
       }
     },
     [hasSupabase, cloudFetch, setUserProfiles]
@@ -363,7 +612,7 @@ export function useSupabaseSync({
     [hasSupabase, cloudFetch, removedPlaceIds, setAttractions, setRemovedPlaceIds]
   );
 
-  // Sincronização automática ao abrir, ao focar e a cada 8 segundos
+  // Sincronização automática ao abrir, ao focar, ao voltar sinal ('online') e a cada 8 segundos
   useEffect(() => {
     if (!hasSupabase) {
       setSyncStatus('local');
@@ -374,10 +623,13 @@ export function useSupabaseSync({
       syncFromCloud(true);
     }, 8000);
     const onFocus = () => syncFromCloud(true);
+    const onOnline = () => syncFromCloud(false);
     window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
     };
   }, [hasSupabase, syncFromCloud]);
 
@@ -432,6 +684,8 @@ export function useSupabaseSync({
     }
     setSyncStatus('syncing');
     try {
+      await flushOfflineQueue();
+
       if (stopVotes.length > 0) {
         await cloudFetch('stop_votes?on_conflict=id', {
           method: 'POST',
@@ -505,9 +759,13 @@ export function useSupabaseSync({
     syncErrorDetail,
     setSyncErrorDetail,
     lastSyncedAt,
+    pendingQueueCount: offlineQueue.length,
     cloudFetch,
     syncFromCloud,
     pushAllLocalToCloud,
+    enqueueOfflineOp,
+    upsertMemberProfile,
+    unlockMemberDevicesAsAdmin,
     syncUserProfileToCloud,
     deletePlaceAsAdmin,
   };

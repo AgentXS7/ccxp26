@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sp2026-cache-v5';
+const CACHE_NAME = 'sp2026-cache-v6';
 const PRECACHE_URLS = [
   '/',
   '/index.html',

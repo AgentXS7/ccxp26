@@ -45,6 +45,34 @@ export interface UserPreferences {
   showStickers?: boolean;
 }
 
+export type GroupMemberId = 'max' | 'allan' | 'dino' | 'leandro';
+
+export interface GroupMemberSpec {
+  id: GroupMemberId;
+  name: string;
+}
+
+export interface MemberCloudProfile {
+  kind: 'member_profile';
+  memberId: GroupMemberId;
+  name: string;
+  trustedDevices: string[];
+  transferCode: string;
+  avatarPhoto: string | null;
+  personalBudget?: PersonalBudgetState;
+  personalItinerary?: PersonalItineraryState;
+  themePreset?: ThemePresetId;
+  updatedAt: string;
+}
+
+export type OfflineQueueOp =
+  | { key: string; type: 'vote_upsert'; payload: StopVoteEntry; createdAt: string }
+  | { key: string; type: 'vote_delete'; payload: { id: string }; createdAt: string }
+  | { key: string; type: 'like_upsert'; payload: PlaceLikeEntry; createdAt: string }
+  | { key: string; type: 'like_delete'; payload: { id: string }; createdAt: string }
+  | { key: string; type: 'place_upsert'; payload: AttractionMeta; createdAt: string }
+  | { key: string; type: 'member_upsert'; payload: MemberCloudProfile; createdAt: string };
+
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;

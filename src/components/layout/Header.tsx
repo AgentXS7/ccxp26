@@ -26,6 +26,7 @@ interface HeaderProps {
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
   syncErrorDetail: string;
+  pendingQueueCount: number;
   onSyncClick: () => void;
   voterName: string;
   avatarPhoto?: string;
@@ -52,6 +53,7 @@ export function Header({
   syncStatus,
   lastSyncedAt,
   syncErrorDetail,
+  pendingQueueCount,
   onSyncClick,
   voterName,
   avatarPhoto,
@@ -151,7 +153,9 @@ export function Header({
                 : 'bg-[#171C33] border-[#8596D6]/20 text-[#9BA3C2] hover:text-white'
             }`}
             title={
-              syncStatus === 'synced'
+              pendingQueueCount > 0
+                ? `${pendingQueueCount} alteração(ões) feita(s) offline aguardando internet para sincronizar`
+                : syncStatus === 'synced'
                 ? `Sincronizado com Supabase${lastSyncedAt ? ` às ${lastSyncedAt}` : ''}`
                 : syncStatus === 'error'
                 ? `Erro na nuvem: ${syncErrorDetail}`
@@ -181,6 +185,11 @@ export function Header({
                 <CloudOff className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Local</span>
               </>
+            )}
+            {pendingQueueCount > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-[#E5B869] text-[#0C0F1D] text-[10px] font-black leading-none">
+                {pendingQueueCount}
+              </span>
             )}
           </button>
 

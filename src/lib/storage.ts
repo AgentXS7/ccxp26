@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   STOP_VOTES: 'sp2026_stop_votes_v1',
   PLACE_LIKES: 'sp2026_place_likes_v1',
   USER_PROFILES: 'sp2026_user_profiles_v1',
+  MEMBER_PROFILES: 'sp2026_member_profiles_v1',
+  OFFLINE_QUEUE: 'sp2026_offline_queue_v1',
   REMOVED_PLACES: 'sp2026_removed_places_v1',
   VOTER_NAME: 'sp2026_voter_name_v1',
   DEVICE_TOKEN: 'sp2026_device_token_v1',

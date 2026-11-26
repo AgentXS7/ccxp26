@@ -4,12 +4,14 @@ import {
   Copy,
   Database,
   Eye,
+  KeyRound,
   Lock,
   Plus,
   RefreshCw,
   Trash2,
   Unlock,
 } from 'lucide-react';
+import { GROUP_MEMBERS } from '../../data/members';
 import type { SyncStatus } from '../../hooks/useSupabaseSync';
 import { SUPABASE_SCHEMA_SQL } from '../../lib/supabase';
 import { copyTextFallback, formatBRL } from '../../lib/utils';
@@ -19,8 +21,10 @@ import type {
   BudgetItem,
   ChecklistItem,
   ChecklistStatus,
+  GroupMemberId,
   ItineraryDay,
   ItineraryStop,
+  MemberCloudProfile,
   PlaceLikeEntry,
   ShiftType,
   StopVoteEntry,
@@ -45,9 +49,11 @@ interface AdminTabProps {
   stopVotes: StopVoteEntry[];
   placeLikes: PlaceLikeEntry[];
   userProfiles: Record<string, string>;
+  memberProfiles: Partial<Record<GroupMemberId, MemberCloudProfile>>;
   voterName: string;
   avatarPhoto?: string;
   isAdminAuthenticated: boolean;
+  onUnlockMemberDevices: (memberId: GroupMemberId) => void;
   setIsAdminAuthenticated: (v: boolean) => void;
   pinInput: string;
   setPinInput: (v: string) => void;
@@ -114,9 +120,11 @@ export function AdminTab({
   stopVotes,
   placeLikes,
   userProfiles,
+  memberProfiles,
   voterName,
   avatarPhoto,
   isAdminAuthenticated,
+  onUnlockMemberDevices,
   setIsAdminAuthenticated,
   pinInput,
   setPinInput,
@@ -373,6 +381,69 @@ export function AdminTab({
                   })}
               </div>
             )}
+          </div>
+
+          {/* Perfis Fixos do Grupo (Trava de Aparelho + Código de Transferência) */}
+          <div className="rounded-3xl hoyo-card p-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  Perfis do Grupo (Max, Allan, Dino, Leandro)
+                </h3>
+                <p className="text-xs text-[#9BA3C2]">
+                  Cada perfil fica travado no aparelho do dono. Se alguém trocar de celular ou esquecer o código, você libera aqui sem apagar nada.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {GROUP_MEMBERS.map((member) => {
+                const cloud = memberProfiles[member.id];
+                const devicesCount = cloud?.trustedDevices?.length || 0;
+                return (
+                  <div
+                    key={member.id}
+                    className="rounded-2xl hoyo-card-inner p-3.5 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <UserAvatar
+                        photo={cloud?.avatarPhoto || undefined}
+                        name={member.name}
+                        sizeClass="w-9 h-9"
+                        textClass="text-xs"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-bold text-white truncate">
+                          {member.name}
+                        </p>
+                        <p className="text-[11px] text-[#9BA3C2]">
+                          {devicesCount > 0
+                            ? `Travado em ${devicesCount} ${devicesCount === 1 ? 'aparelho' : 'aparelhos'}`
+                            : 'Disponível (sem aparelho travado)'}
+                        </p>
+                        {isAdminAuthenticated && cloud?.transferCode && (
+                          <p className="text-[10px] text-[#F6D794] font-mono inline-flex items-center gap-1 mt-0.5">
+                            <KeyRound className="w-3 h-3" /> Código: {cloud.transferCode}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {isAdminAuthenticated && devicesCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onUnlockMemberDevices(member.id)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-[#E5B869]/15 border border-[#E5B869]/40 text-[#F6D794] hover:bg-[#E5B869]/25 shrink-0 transition"
+                        title="Liberar aparelho (preserva foto, gastos e roteiro)"
+                      >
+                        <Unlock className="w-3 h-3" />
+                        <span>Liberar</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

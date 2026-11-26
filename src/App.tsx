@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 import { INITIAL_ATTRACTIONS } from './data/attractions';
@@ -7,6 +7,7 @@ import { INITIAL_BUDGET_ITEMS } from './data/budget';
 import { INITIAL_CHECKLIST } from './data/checklist';
 import { HERO_IMAGES, INITIAL_CONFIG } from './data/config';
 import { INITIAL_DAYS } from './data/days';
+import { findMemberByNameOrId, generateTransferCode, getMemberName } from './data/members';
 import { INITIAL_STOPS } from './data/stops';
 import { INITIAL_TRANSPORT_LEGS } from './data/transport';
 
@@ -49,8 +50,11 @@ import type {
   BudgetCategory,
   BudgetItem,
   ChecklistItem,
+  GroupMemberId,
   ItineraryDay,
   ItineraryStop,
+  MemberCloudProfile,
+  OfflineQueueOp,
   PersonalBudgetState,
   PersonalItineraryState,
   PlaceLikeEntry,
@@ -173,6 +177,13 @@ export default function App() {
     STORAGE_KEYS.USER_PROFILES,
     {}
   );
+  const [memberProfiles, setMemberProfiles] = usePersistedState<
+    Partial<Record<GroupMemberId, MemberCloudProfile>>
+  >(STORAGE_KEYS.MEMBER_PROFILES, {});
+  const [offlineQueue, setOfflineQueue] = usePersistedState<OfflineQueueOp[]>(
+    STORAGE_KEYS.OFFLINE_QUEUE,
+    []
+  );
   const [removedPlaceIds, setRemovedPlaceIds] = usePersistedState<string[]>(
     STORAGE_KEYS.REMOVED_PLACES,
     []
@@ -182,6 +193,29 @@ export default function App() {
     { hiddenStopIds: [], addedStops: [] }
   );
 
+  const deviceToken = useMemo(() => getOrCreateDeviceToken(), []);
+
+  // Identifica o membro oficial (Max, Allan, Dino, Leandro) apenas se o aparelho estiver autorizado
+  const activeMemberSpec = useMemo(
+    () => findMemberByNameOrId(voterName),
+    [voterName]
+  );
+
+  const activeMemberId: GroupMemberId | null = useMemo(() => {
+    if (!activeMemberSpec) return null;
+    const cloud = memberProfiles[activeMemberSpec.id];
+    if (
+      cloud &&
+      cloud.trustedDevices.length > 0 &&
+      !cloud.trustedDevices.includes(deviceToken)
+    ) {
+      return null;
+    }
+    return activeMemberSpec.id;
+  }, [activeMemberSpec, memberProfiles, deviceToken]);
+
+  const effectiveVoterName = activeMemberId ? getMemberName(activeMemberId) : '';
+
   // Área Administrativa
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -189,7 +223,45 @@ export default function App() {
   const [adminSection, setAdminSection] = useState<AdminSectionKey>('reservas');
   const [showSql, setShowSql] = useState(false);
 
-  // Sincronização em nuvem (Supabase)
+  const isHydratingFromCloudRef = useRef(false);
+  const lastSyncedMemberTimestampRef = useRef<string>('');
+
+  const hydrateMemberLocalState = useCallback(
+    (profile: MemberCloudProfile) => {
+      isHydratingFromCloudRef.current = true;
+      lastSyncedMemberTimestampRef.current = profile.updatedAt;
+      setUserPrefs((prev) => ({
+        ...prev,
+        avatarPhoto: profile.avatarPhoto || undefined,
+        themePreset: profile.themePreset || prev.themePreset,
+      }));
+      if (profile.personalBudget) {
+        setPersonalBudget(profile.personalBudget);
+      }
+      if (profile.personalItinerary) {
+        setPersonalItinerary(profile.personalItinerary);
+      }
+      window.setTimeout(() => {
+        isHydratingFromCloudRef.current = false;
+      }, 100);
+    },
+    [setUserPrefs, setPersonalItinerary]
+  );
+
+  const handleRemoteActiveMemberSync = useCallback(
+    (remoteProfile: MemberCloudProfile) => {
+      if (
+        lastSyncedMemberTimestampRef.current &&
+        remoteProfile.updatedAt <= lastSyncedMemberTimestampRef.current
+      ) {
+        return;
+      }
+      hydrateMemberLocalState(remoteProfile);
+    },
+    [hydrateMemberLocalState]
+  );
+
+  // Sincronização em nuvem (Supabase) + Fila Offline
   const {
     cleanSbUrl,
     cleanSbKey,
@@ -199,10 +271,13 @@ export default function App() {
     syncErrorDetail,
     setSyncErrorDetail,
     lastSyncedAt,
+    pendingQueueCount,
     cloudFetch,
     syncFromCloud,
     pushAllLocalToCloud,
-    syncUserProfileToCloud,
+    enqueueOfflineOp,
+    upsertMemberProfile,
+    unlockMemberDevicesAsAdmin,
     deletePlaceAsAdmin,
   } = useSupabaseSync({
     config,
@@ -220,24 +295,20 @@ export default function App() {
     placeLikes,
     setPlaceLikes,
     setUserProfiles,
+    memberProfiles,
+    setMemberProfiles,
+    offlineQueue,
+    setOfflineQueue,
     removedPlaceIds,
     setRemovedPlaceIds,
-    voterName,
+    activeMemberId,
+    deviceToken,
+    voterName: effectiveVoterName,
     avatarPhoto: userPrefs.avatarPhoto,
+    onRemoteActiveMemberSync: handleRemoteActiveMemberSync,
     isAdminAuthenticated,
     showToast,
   });
-
-  // Garante que a foto de perfil já salva no aparelho suba para o Supabase automaticamente
-  useEffect(() => {
-    if (!hasSupabase || !voterName.trim() || !userPrefs.avatarPhoto) return;
-    const key = voterName.trim().toLowerCase();
-    if (userProfiles[key] !== userPrefs.avatarPhoto) {
-      syncUserProfileToCloud(voterName, userPrefs.avatarPhoto);
-    }
-  }, [hasSupabase, voterName, userPrefs.avatarPhoto, userProfiles, syncUserProfileToCloud]);
-
-  const deviceToken = useMemo(() => getOrCreateDeviceToken(), []);
 
   const daysUntilTrip = useMemo(() => {
     const tripStart = new Date('2026-12-03T00:00:00-03:00').getTime();
@@ -257,7 +328,6 @@ export default function App() {
     pendingChoice: null,
     pendingLikeAttractionId: null,
   });
-  const [voterNameInput, setVoterNameInput] = useState('');
 
   const applyStopVote = (stopId: string, choice: 'yes' | 'no', personName: string) => {
     const cleanName = personName.trim();
@@ -272,6 +342,18 @@ export default function App() {
     if (existing && existing.choice === choice) {
       setStopVotes((prev) => prev.filter((v) => v.id !== existing.id));
       if (hasSupabase) {
+        const offlineOp: OfflineQueueOp = {
+          key: `vote:${stopId}:${slugifyName(cleanName)}`,
+          type: 'vote_delete',
+          payload: { id: existing.id },
+          createdAt: new Date().toISOString(),
+        };
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          enqueueOfflineOp(offlineOp);
+          setSyncStatus('local');
+          showToast('Voto removido no celular — será sincronizado quando voltar a internet.', 'info');
+          return;
+        }
         cloudFetch(`stop_votes?id=eq.${encodeURIComponent(existing.id)}`, {
           method: 'DELETE',
         })
@@ -279,9 +361,10 @@ export default function App() {
             setSyncStatus('synced');
             setSyncErrorDetail('');
           })
-          .catch((err) => {
-            setSyncStatus('error');
-            setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao remover voto');
+          .catch(() => {
+            enqueueOfflineOp(offlineOp);
+            setSyncStatus('local');
+            showToast('Sem sinal agora — alteração salva na fila para enviar depois.', 'info');
           });
       }
       return;
@@ -305,6 +388,18 @@ export default function App() {
     });
 
     if (hasSupabase) {
+      const offlineOp: OfflineQueueOp = {
+        key: `vote:${stopId}:${slugifyName(cleanName)}`,
+        type: 'vote_upsert',
+        payload: nextEntry,
+        createdAt: nextEntry.updatedAt,
+      };
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        enqueueOfflineOp(offlineOp);
+        setSyncStatus('local');
+        showToast('Voto salvo no metrô/offline! Será enviado quando voltar o sinal.', 'info');
+        return;
+      }
       cloudFetch('stop_votes?on_conflict=id', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates' },
@@ -321,10 +416,10 @@ export default function App() {
           setSyncStatus('synced');
           setSyncErrorDetail('');
         })
-        .catch((err) => {
-          setSyncStatus('error');
-          setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao salvar voto');
-          showToast('Voto salvo só no celular — verifique a conexão Supabase no Admin.', 'info');
+        .catch(() => {
+          enqueueOfflineOp(offlineOp);
+          setSyncStatus('local');
+          showToast('Sem sinal agora — voto salvo na fila e será enviado automático!', 'info');
         });
     }
   };
@@ -342,6 +437,18 @@ export default function App() {
     if (existing) {
       setPlaceLikes((prev) => prev.filter((l) => l.id !== existing.id));
       if (hasSupabase) {
+        const offlineOp: OfflineQueueOp = {
+          key: `like:${attractionId}:${slugifyName(cleanName)}`,
+          type: 'like_delete',
+          payload: { id: existing.id },
+          createdAt: new Date().toISOString(),
+        };
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          enqueueOfflineOp(offlineOp);
+          setSyncStatus('local');
+          showToast('Curtida removida offline — sincroniza assim que voltar o sinal.', 'info');
+          return;
+        }
         cloudFetch(`place_likes?id=eq.${encodeURIComponent(existing.id)}`, {
           method: 'DELETE',
         })
@@ -349,9 +456,9 @@ export default function App() {
             setSyncStatus('synced');
             setSyncErrorDetail('');
           })
-          .catch((err) => {
-            setSyncStatus('error');
-            setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao remover curtida');
+          .catch(() => {
+            enqueueOfflineOp(offlineOp);
+            setSyncStatus('local');
           });
       }
       return;
@@ -369,6 +476,18 @@ export default function App() {
     setPlaceLikes((prev) => [...prev, nextLike]);
 
     if (hasSupabase) {
+      const offlineOp: OfflineQueueOp = {
+        key: `like:${attractionId}:${slugifyName(cleanName)}`,
+        type: 'like_upsert',
+        payload: nextLike,
+        createdAt: nextLike.createdAt,
+      };
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        enqueueOfflineOp(offlineOp);
+        setSyncStatus('local');
+        showToast('Favorito salvo offline! Será enviado quando voltar a internet.', 'info');
+        return;
+      }
       cloudFetch('place_likes?on_conflict=id', {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates' },
@@ -384,10 +503,10 @@ export default function App() {
           setSyncStatus('synced');
           setSyncErrorDetail('');
         })
-        .catch((err) => {
-          setSyncStatus('error');
-          setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao salvar curtida');
-          showToast('Curtida salva só no celular — verifique a conexão Supabase no Admin.', 'info');
+        .catch(() => {
+          enqueueOfflineOp(offlineOp);
+          setSyncStatus('local');
+          showToast('Sem sinal agora — favorito salvo na fila para enviar depois!', 'info');
         });
     }
   };
@@ -398,8 +517,7 @@ export default function App() {
     choice: 'yes' | 'no'
   ) => {
     e.stopPropagation();
-    if (!voterName.trim()) {
-      setVoterNameInput('');
+    if (!effectiveVoterName) {
       setVoterPromptModal({
         open: true,
         pendingStopId: stopId,
@@ -408,13 +526,12 @@ export default function App() {
       });
       return;
     }
-    applyStopVote(stopId, choice, voterName);
+    applyStopVote(stopId, choice, effectiveVoterName);
   };
 
   const handleTogglePlaceLike = (e: React.MouseEvent, attractionId: string) => {
     e.stopPropagation();
-    if (!voterName.trim()) {
-      setVoterNameInput('');
+    if (!effectiveVoterName) {
       setVoterPromptModal({
         open: true,
         pendingStopId: null,
@@ -423,20 +540,19 @@ export default function App() {
       });
       return;
     }
-    applyPlaceLike(attractionId, voterName);
+    applyPlaceLike(attractionId, effectiveVoterName);
   };
 
-  const handleConfirmVoterName = (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = voterNameInput.trim();
-    if (!clean) return;
-    setVoterName(clean);
-    syncUserProfileToCloud(clean, userPrefs.avatarPhoto);
+  const completePendingInteraction = (memberName: string) => {
     if (voterPromptModal.pendingStopId && voterPromptModal.pendingChoice) {
-      applyStopVote(voterPromptModal.pendingStopId, voterPromptModal.pendingChoice, clean);
+      applyStopVote(
+        voterPromptModal.pendingStopId,
+        voterPromptModal.pendingChoice,
+        memberName
+      );
     }
     if (voterPromptModal.pendingLikeAttractionId) {
-      applyPlaceLike(voterPromptModal.pendingLikeAttractionId, clean);
+      applyPlaceLike(voterPromptModal.pendingLikeAttractionId, memberName);
     }
     setVoterPromptModal({
       open: false,
@@ -444,11 +560,109 @@ export default function App() {
       pendingChoice: null,
       pendingLikeAttractionId: null,
     });
-    showToast(`Identificado como ${clean}!`);
+  };
+
+  const handleSelectFreeMember = (memberId: GroupMemberId) => {
+    const memberName = getMemberName(memberId);
+    const existing = memberProfiles[memberId];
+    const now = new Date().toISOString();
+
+    const nextProfile: MemberCloudProfile = existing
+      ? {
+          ...existing,
+          trustedDevices: Array.from(new Set([...existing.trustedDevices, deviceToken])),
+          transferCode: existing.transferCode || generateTransferCode(),
+          updatedAt: now,
+        }
+      : {
+          kind: 'member_profile',
+          memberId,
+          name: memberName,
+          trustedDevices: [deviceToken],
+          transferCode: generateTransferCode(),
+          avatarPhoto: userPrefs.avatarPhoto || null,
+          personalBudget,
+          personalItinerary,
+          themePreset: userPrefs.themePreset,
+          updatedAt: now,
+        };
+
+    if (existing) {
+      hydrateMemberLocalState(nextProfile);
+    } else {
+      lastSyncedMemberTimestampRef.current = now;
+    }
+
+    setVoterName(memberName);
+    upsertMemberProfile(nextProfile);
+    completePendingInteraction(memberName);
+    showToast(`Perfil de ${memberName} travado neste celular! Código: ${nextProfile.transferCode}`);
+  };
+
+  const handleAuthorizeMemberWithCode = (
+    memberId: GroupMemberId,
+    code: string
+  ): boolean => {
+    const existing = memberProfiles[memberId];
+    if (!existing || existing.transferCode !== code.trim()) {
+      return false;
+    }
+    const memberName = getMemberName(memberId);
+    const now = new Date().toISOString();
+    const updated: MemberCloudProfile = {
+      ...existing,
+      trustedDevices: Array.from(new Set([...existing.trustedDevices, deviceToken])),
+      updatedAt: now,
+    };
+
+    hydrateMemberLocalState(updated);
+    setVoterName(memberName);
+    upsertMemberProfile(updated);
+    completePendingInteraction(memberName);
+    showToast(`Bem-vindo de volta, ${memberName}! Seus dados foram carregados.`);
+    return true;
+  };
+
+  const handleUpdateMemberAvatarPhoto = (photo: string | undefined) => {
+    setUserPrefs((prev) => ({ ...prev, avatarPhoto: photo }));
+    if (!activeMemberId) return;
+    const existing = memberProfiles[activeMemberId];
+    const now = new Date().toISOString();
+    lastSyncedMemberTimestampRef.current = now;
+    const nextProfile: MemberCloudProfile = {
+      kind: 'member_profile',
+      memberId: activeMemberId,
+      name: getMemberName(activeMemberId),
+      trustedDevices: existing?.trustedDevices?.length
+        ? Array.from(new Set([...existing.trustedDevices, deviceToken]))
+        : [deviceToken],
+      transferCode: existing?.transferCode || generateTransferCode(),
+      avatarPhoto: photo || null,
+      personalBudget,
+      personalItinerary,
+      themePreset: userPrefs.themePreset,
+      updatedAt: now,
+    };
+    upsertMemberProfile(nextProfile);
+  };
+
+  const handleLeaveDevice = () => {
+    if (activeMemberId) {
+      const existing = memberProfiles[activeMemberId];
+      if (existing) {
+        const updated: MemberCloudProfile = {
+          ...existing,
+          trustedDevices: existing.trustedDevices.filter((t) => t !== deviceToken),
+          updatedAt: new Date().toISOString(),
+        };
+        upsertMemberProfile(updated);
+      }
+    }
+    setVoterName('');
+    showToast('Perfil desconectado deste aparelho.', 'info');
   };
 
   const openVoterModal = () => {
-    setVoterNameInput(voterName);
     setVoterPromptModal({
       open: true,
       pendingStopId: null,
@@ -588,6 +802,73 @@ export default function App() {
     config.airbnbTotalCost,
     confirmedFriends.length,
     personalBudget,
+  ]);
+
+  // Sincronização automática dos dados pessoais do membro travado (foto, custos, roteiro pessoal e tema)
+  const memberSyncSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        avatarPhoto: userPrefs.avatarPhoto || null,
+        themePreset: userPrefs.themePreset,
+        personalBudget,
+        personalItinerary,
+      }),
+    [userPrefs.avatarPhoto, userPrefs.themePreset, personalBudget, personalItinerary]
+  );
+
+  const lastPushedSnapshotRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!activeMemberId || !hasSupabase || isHydratingFromCloudRef.current) return;
+    const existing = memberProfiles[activeMemberId];
+    // Se acabou de hidratar da nuvem, apenas registra o snapshot sem reenviar
+    if (
+      existing &&
+      lastSyncedMemberTimestampRef.current === existing.updatedAt &&
+      lastPushedSnapshotRef.current === ''
+    ) {
+      lastPushedSnapshotRef.current = memberSyncSnapshot;
+      return;
+    }
+    if (existing && lastPushedSnapshotRef.current === memberSyncSnapshot) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (isHydratingFromCloudRef.current) return;
+      const currentCloud = memberProfiles[activeMemberId];
+      const now = new Date().toISOString();
+      lastSyncedMemberTimestampRef.current = now;
+      lastPushedSnapshotRef.current = memberSyncSnapshot;
+      const nextProfile: MemberCloudProfile = {
+        kind: 'member_profile',
+        memberId: activeMemberId,
+        name: getMemberName(activeMemberId),
+        trustedDevices: currentCloud?.trustedDevices?.length
+          ? Array.from(new Set([...currentCloud.trustedDevices, deviceToken]))
+          : [deviceToken],
+        transferCode: currentCloud?.transferCode || generateTransferCode(),
+        avatarPhoto: userPrefs.avatarPhoto || null,
+        personalBudget,
+        personalItinerary,
+        themePreset: userPrefs.themePreset,
+        updatedAt: now,
+      };
+      upsertMemberProfile(nextProfile);
+    }, 650);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeMemberId,
+    hasSupabase,
+    memberSyncSnapshot,
+    memberProfiles,
+    deviceToken,
+    userPrefs.avatarPhoto,
+    userPrefs.themePreset,
+    personalBudget,
+    personalItinerary,
+    upsertMemberProfile,
   ]);
 
   // Compartilhamento
@@ -788,29 +1069,40 @@ export default function App() {
         newPlaceForm.notes.trim() ||
         'Sugestão adicionada pelo grupo diretamente pelo site.',
       inOfficialRoute: newPlaceForm.inOfficialRoute,
-      addedBy: voterName.trim() || 'Grupo',
+      addedBy: effectiveVoterName || 'Grupo',
     };
 
     setAttractions((prev) => [created, ...prev]);
 
     if (hasSupabase) {
-      cloudFetch('custom_places?on_conflict=id', {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify({
-          id: created.id,
-          payload: created,
-          created_at: new Date().toISOString(),
-        }),
-      })
-        .then(() => {
-          setSyncStatus('synced');
-          setSyncErrorDetail('');
+      const offlineOp: OfflineQueueOp = {
+        key: `place:${created.id}`,
+        type: 'place_upsert',
+        payload: created,
+        createdAt: new Date().toISOString(),
+      };
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        enqueueOfflineOp(offlineOp);
+        setSyncStatus('local');
+      } else {
+        cloudFetch('custom_places?on_conflict=id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            id: created.id,
+            payload: created,
+            created_at: new Date().toISOString(),
+          }),
         })
-        .catch((err) => {
-          setSyncStatus('error');
-          setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao salvar lugar');
-        });
+          .then(() => {
+            setSyncStatus('synced');
+            setSyncErrorDetail('');
+          })
+          .catch(() => {
+            enqueueOfflineOp(offlineOp);
+            setSyncStatus('local');
+          });
+      }
     }
 
     if (newPlaceForm.addToPersonalRoute) {
@@ -964,7 +1256,7 @@ export default function App() {
       {userPrefs.showMascot !== false && (
         <MascotCorner
           activeTab={activeTab}
-          voterName={voterName}
+          voterName={effectiveVoterName}
           onHide={() => {
             setUserPrefs((p) => ({ ...p, showMascot: false }));
             showToast('Mascote escondido. Dá pra trazer de volta no 🎨 Tema!', 'info');
@@ -981,6 +1273,7 @@ export default function App() {
         syncStatus={syncStatus}
         lastSyncedAt={lastSyncedAt}
         syncErrorDetail={syncErrorDetail}
+        pendingQueueCount={pendingQueueCount}
         onSyncClick={() => {
           if (hasSupabase) {
             syncFromCloud(false);
@@ -990,7 +1283,7 @@ export default function App() {
             setAdminSection('supabase');
           }
         }}
-        voterName={voterName}
+        voterName={effectiveVoterName}
         avatarPhoto={userPrefs.avatarPhoto}
         onOpenVoterModal={openVoterModal}
         onOpenThemeModal={() => setThemeModalOpen(true)}
@@ -1038,7 +1331,7 @@ export default function App() {
             placeLikesCount={placeLikes.length}
             stopVotesCount={stopVotes.length}
             uniqueVotersCount={uniqueVoters.length}
-            voterName={voterName}
+            voterName={effectiveVoterName}
             avatarPhoto={userPrefs.avatarPhoto}
             setActiveTab={setActiveTab}
             onJumpToDay={(date) => {
@@ -1061,7 +1354,7 @@ export default function App() {
             dayStops={dayStops}
             attractions={attractions}
             stopVotes={stopVotes}
-            voterName={voterName}
+            voterName={effectiveVoterName}
             avatarPhoto={userPrefs.avatarPhoto}
             userProfiles={userProfiles}
             compactCards={userPrefs.compactCards}
@@ -1095,7 +1388,7 @@ export default function App() {
             filteredAttractions={filteredAttractions}
             excludedAttractions={excludedAttractions}
             placeLikes={placeLikes}
-            voterName={voterName}
+            voterName={effectiveVoterName}
             avatarPhoto={userPrefs.avatarPhoto}
             userProfiles={userProfiles}
             peoplePerCar={peoplePerCar}
@@ -1149,9 +1442,11 @@ export default function App() {
             stopVotes={stopVotes}
             placeLikes={placeLikes}
             userProfiles={userProfiles}
-            voterName={voterName}
+            memberProfiles={memberProfiles}
+            voterName={effectiveVoterName}
             avatarPhoto={userPrefs.avatarPhoto}
             isAdminAuthenticated={isAdminAuthenticated}
+            onUnlockMemberDevices={unlockMemberDevicesAsAdmin}
             setIsAdminAuthenticated={setIsAdminAuthenticated}
             pinInput={pinInput}
             setPinInput={setPinInput}
@@ -1240,16 +1535,15 @@ export default function App() {
             pendingLikeAttractionId: null,
           })
         }
-        voterNameInput={voterNameInput}
-        setVoterNameInput={setVoterNameInput}
+        activeMemberId={activeMemberId}
+        activeMemberName={effectiveVoterName}
+        deviceToken={deviceToken}
+        memberProfiles={memberProfiles}
         avatarPhoto={userPrefs.avatarPhoto}
-        setAvatarPhoto={(photo) => {
-          setUserPrefs((prev) => ({ ...prev, avatarPhoto: photo }));
-          if (voterName.trim()) {
-            syncUserProfileToCloud(voterName, photo);
-          }
-        }}
-        onSubmit={handleConfirmVoterName}
+        onSelectFreeMember={handleSelectFreeMember}
+        onAuthorizeMemberWithCode={handleAuthorizeMemberWithCode}
+        onUpdateAvatarPhoto={handleUpdateMemberAvatarPhoto}
+        onLeaveDevice={handleLeaveDevice}
       />
 
       <ThemePersonalizeModal
@@ -1257,7 +1551,7 @@ export default function App() {
         onClose={() => setThemeModalOpen(false)}
         prefs={userPrefs}
         setPrefs={setUserPrefs}
-        voterName={voterName}
+        voterName={effectiveVoterName}
         onOpenVoterModal={openVoterModal}
       />
 
@@ -1265,7 +1559,7 @@ export default function App() {
         attraction={selectedAttraction}
         onClose={() => setSelectedAttraction(null)}
         placeLikes={placeLikes}
-        voterName={voterName}
+        voterName={effectiveVoterName}
         avatarPhoto={userPrefs.avatarPhoto}
         userProfiles={userProfiles}
         peoplePerCar={peoplePerCar}
