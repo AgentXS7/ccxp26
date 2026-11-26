@@ -1,0 +1,267 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --bg-canvas: #0c0f1d;
+    --bg-surface: #14192d;
+    --bg-elevated: #1c223b;
+    --border-subtle: rgba(133, 150, 214, 0.16);
+    --border-gold: rgba(229, 184, 105, 0.34);
+
+    /* Tokens personalizáveis pelo usuário (padrão: HoYoLAB Periwinkle) */
+    --brand-accent: #657ef8;
+    --brand-accent-hover: #798ffa;
+    --brand-accent-soft: rgba(101, 126, 248, 0.15);
+    --brand-accent-border: rgba(101, 126, 248, 0.42);
+    --brand-gold: #e5b869;
+    --brand-teal: #47c5b8;
+  }
+
+  [data-theme="geo"] {
+    --brand-accent: #dfa94a;
+    --brand-accent-hover: #ebb95e;
+    --brand-accent-soft: rgba(223, 169, 74, 0.16);
+    --brand-accent-border: rgba(223, 169, 74, 0.45);
+  }
+
+  [data-theme="anemo"] {
+    --brand-accent: #3dc6b5;
+    --brand-accent-hover: #53d6c5;
+    --brand-accent-soft: rgba(61, 198, 181, 0.16);
+    --brand-accent-border: rgba(61, 198, 181, 0.45);
+  }
+
+  [data-theme="pyro"] {
+    --brand-accent: #ec6b6b;
+    --brand-accent-hover: #f57e7e;
+    --brand-accent-soft: rgba(236, 107, 107, 0.16);
+    --brand-accent-border: rgba(236, 107, 107, 0.45);
+  }
+
+  html {
+    font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background-color: var(--bg-canvas);
+    color: #eef1fa;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-canvas);
+    background-image:
+      radial-gradient(900px 420px at 85% -10%, rgba(101, 126, 248, 0.14), transparent 65%),
+      radial-gradient(700px 360px at 10% 15%, rgba(229, 184, 105, 0.08), transparent 60%),
+      radial-gradient(rgba(163, 180, 255, 0.09) 1px, transparent 1px);
+    background-size: auto, auto, 26px 26px;
+    background-attachment: fixed;
+    accent-color: var(--brand-accent);
+  }
+}
+
+/* Cards e ornamentos sutis estilo HoYoLAB / Diário de Viagem */
+.hoyo-card {
+  background: linear-gradient(180deg, rgba(25, 31, 56, 0.94) 0%, rgba(20, 25, 45, 0.98) 100%);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 10px 30px -12px rgba(4, 6, 16, 0.72);
+}
+
+.hoyo-card-inner {
+  background: rgba(12, 15, 29, 0.72);
+  border: 1px solid rgba(133, 150, 214, 0.14);
+}
+
+.hoyo-gold-hairline {
+  border-color: var(--border-gold);
+}
+
+.hoyo-shimmer-top {
+  position: relative;
+}
+.hoyo-shimmer-top::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(229, 184, 105, 0.65),
+    var(--brand-accent),
+    rgba(229, 184, 105, 0.65),
+    transparent
+  );
+  pointer-events: none;
+}
+
+@keyframes twinkleSoft {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.animate-twinkle {
+  animation: twinkleSoft 3.2s ease-in-out infinite;
+}
+
+/* Adesivos flutuando */
+@keyframes stickerFloat {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+.animate-sticker-float {
+  animation: stickerFloat 4.6s ease-in-out infinite;
+}
+
+/* Mascote balançando */
+@keyframes mascotBob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(2deg);
+  }
+}
+.animate-mascot-bob {
+  animation: mascotBob 3.4s ease-in-out infinite;
+}
+
+.mascot-frame {
+  padding: 3px;
+  background: conic-gradient(from 140deg, #e5b869, var(--brand-accent), #47c5b8, #e5b869);
+  box-shadow:
+    0 0 0 3px #0c0f1d,
+    0 12px 28px -8px rgba(0, 0, 0, 0.8),
+    0 0 22px -4px var(--brand-accent);
+}
+
+/* Carrinho atravessando a estrada do hero */
+@keyframes carDrive {
+  0% {
+    left: -12%;
+  }
+  100% {
+    left: 104%;
+  }
+}
+.animate-car-drive {
+  animation: carDrive 14s linear infinite;
+}
+
+.road-dashes {
+  background-image: linear-gradient(90deg, #e5b869 0 14px, transparent 14px 26px);
+  background-size: 26px 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-twinkle,
+  .animate-sticker-float,
+  .animate-mascot-bob,
+  .animate-car-drive {
+    animation: none;
+  }
+  .animate-car-drive {
+    left: 46%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-twinkle {
+    animation: none;
+  }
+}
+
+.hoyo-accent-btn {
+  background-color: var(--brand-accent);
+  color: #ffffff;
+}
+.hoyo-accent-btn:hover {
+  background-color: var(--brand-accent-hover);
+}
+
+.hoyo-accent-pill {
+  background-color: var(--brand-accent-soft);
+  border-color: var(--brand-accent-border);
+  color: #e9edff;
+}
+
+/* Native <dialog> modal styling & scroll containment (Modern Web Guidance) */
+dialog.hoyo-dialog {
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, #191f38 0%, #13172b 100%);
+  color: #eef1fa;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 24px 60px rgba(4, 6, 16, 0.88);
+}
+
+dialog.hoyo-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.hoyo-dialog::backdrop {
+  background-color: rgba(6, 8, 18, 0.78);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 639px) {
+  dialog.hoyo-dialog {
+    margin-bottom: 0;
+    margin-top: auto;
+    width: 100%;
+    max-width: 100%;
+    border-bottom: none;
+    border-radius: 1.5rem 1.5rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Utilitários mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeInSlide 0.22s ease-out;
+}
+
+/* Fallback acessível para browsers sem accent-color */
+@supports not (accent-color: #657ef8) {
+  input[type="checkbox"] {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+}
