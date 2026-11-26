@@ -69,6 +69,39 @@ export function RamenSticker({ className = 'w-12 h-12' }: StickerProps) {
   );
 }
 
+export function SpaceshipSticker({ className = 'w-12 h-10' }: StickerProps) {
+  return (
+    <svg viewBox="0 0 76 48" className={className} aria-hidden="true">
+      {/* Chama suave do propulsor */}
+      <path d="M4 24c5-5 11-5 14-3v6c-3 2-9 2-14-3Z" fill="#47C5B8" opacity="0.9" />
+      <path d="M9 24c3-2.5 6-2.5 8-1.5v3c-2 1-5 1-8-1.5Z" fill="#FFF3C4" />
+      {/* Contorno branco die-cut da nave */}
+      <path
+        d="M15 16l7-7h12l7 6h10c9 0 18 4.5 21 9-3 4.5-12 9-21 9H41l-7 6H22l-7-7c-2-2-2-14 0-16Z"
+        fill={OUTLINE}
+      />
+      {/* Asas */}
+      <path d="M23 11h10l6 6H21l2-6Z" fill="#47C5B8" />
+      <path d="M23 37h10l6-6H21l2 6Z" fill="#47C5B8" />
+      {/* Corpo principal */}
+      <path
+        d="M18 18h33c7.5 0 14.5 3 17.5 6-3 3-10 6-17.5 6H18c-1.5-2-1.5-10 0-12Z"
+        fill="#657EF8"
+      />
+      {/* Faixa dourada */}
+      <path d="M20 24h43" stroke="#E5B869" strokeWidth="2.2" strokeLinecap="round" />
+      {/* Janela / cabine */}
+      <ellipse cx="47" cy="24" rx="6.5" ry="4" fill="#BFD7FF" stroke="#14192D" strokeWidth="1.4" />
+      <ellipse cx="48.5" cy="22.8" rx="2.5" ry="1.2" fill="#FFFFFF" />
+      {/* Estrelinha na cauda */}
+      <path
+        d="M27 21l.8 2 2.2.3-1.6 1.4.4 2.1-1.8-1-1.8 1 .4-2.1-1.6-1.4 2.2-.3.8-2Z"
+        fill="#FFF3C4"
+      />
+    </svg>
+  );
+}
+
 export function CarSticker({ className = 'w-12 h-12' }: StickerProps) {
   return (
     <svg viewBox="0 0 72 48" className={className} aria-hidden="true">

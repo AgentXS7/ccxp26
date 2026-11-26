@@ -1,7 +1,8 @@
 import type React from 'react';
-import { ExternalLink, Heart, MapPin, Star, X } from 'lucide-react';
+import { ExternalLink, MapPin, Star, X } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
+import { AnimeHeartIcon } from '../ui/AnimeDecor';
 import { HoyoDialog } from '../ui/HoyoDialog';
 
 interface AttractionDrawerProps {
@@ -78,18 +79,16 @@ export function AttractionDrawer({
                   : 'hoyo-card-inner text-[#EEF1FA] hover:border-[#EC6B6B]/55'
               }`}
             >
-              <Heart
-                className={`w-4 h-4 ${
-                  isLikedModal ? 'fill-white text-white' : 'text-[#F49797]'
-                }`}
-              />
+              <AnimeHeartIcon filled={isLikedModal} className="w-4 h-4" />
               <span>{likesForModal.length}</span>
             </button>
           </div>
 
           {likesForModal.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-[#F49797] font-bold">❤️ Favoritado por:</span>
+              <span className="inline-flex items-center gap-1 text-[#F49797] font-bold">
+                <AnimeHeartIcon className="w-3.5 h-3.5" /> Favoritado por:
+              </span>
               {likesForModal.map((l) => (
                 <span
                   key={l.id}

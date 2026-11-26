@@ -1,8 +1,9 @@
 import type React from 'react';
-import { Heart, Plus, Search, Star } from 'lucide-react';
+import { Plus, Search, Star } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
-import { CornerOrnaments, StarSparkleIcon } from '../ui/AnimeDecor';
-import { PixelGhostSticker, StickerForCategory } from '../ui/GameStickers';
+import { AnimeHeartIcon, CornerOrnaments, StarSparkleIcon } from '../ui/AnimeDecor';
+import { PixelGhostSticker } from '../ui/GameStickers';
+import { UserAvatar } from '../ui/UserAvatar';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 
 interface ExploreTabProps {
@@ -23,6 +24,7 @@ interface ExploreTabProps {
   placeLikes: PlaceLikeEntry[];
   voterName: string;
   avatarBadge: string;
+  avatarPhoto?: string;
   peoplePerCar: number;
   compactCards: boolean;
   onOpenAddPlace: () => void;
@@ -48,6 +50,7 @@ export function ExploreTab({
   placeLikes,
   voterName,
   avatarBadge,
+  avatarPhoto,
   peoplePerCar,
   compactCards,
   onOpenAddPlace,
@@ -67,7 +70,11 @@ export function ExploreTab({
               Explorar Locais & Favoritos do Grupo
             </h2>
             <p className="text-xs text-[#9BA3C2] mt-0.5">
-              Dê <strong className="text-[#F7A3A3]">❤️ coração</strong> nos seus lugares preferidos (aparece quem curtiu!) ou adicione novos locais para o grupo ver.
+              Dê{' '}
+              <strong className="inline-flex items-center gap-1 text-[#F7A3A3]">
+                <AnimeHeartIcon className="w-3.5 h-3.5" /> coração
+              </strong>{' '}
+              nos seus lugares preferidos (aparece quem curtiu!) ou adicione novos locais para o grupo ver.
             </p>
           </div>
 
@@ -89,10 +96,9 @@ export function ExploreTab({
                   : 'hoyo-card-inner text-[#CBD2EC] hover:border-[#EC6B6B]/40'
               }`}
             >
-              <Heart
-                className={`w-3.5 h-3.5 ${
-                  exploreOnlyLiked ? 'fill-[#EC6B6B] text-[#EC6B6B]' : 'text-[#F49797]'
-                }`}
+              <AnimeHeartIcon
+                filled={exploreOnlyLiked}
+                className="w-3.5 h-3.5"
               />
               Favoritos ({new Set(placeLikes.map((l) => l.attractionId)).size})
             </button>
@@ -203,10 +209,6 @@ export function ExploreTab({
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#14192D] via-[#0C0F1D]/25 to-transparent" />
-                    <StickerForCategory
-                      category={attr.category}
-                      className="absolute -bottom-3 right-3 w-11 h-11 rotate-12 drop-shadow-lg"
-                    />
                     <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
                       <span className="text-[10px] font-semibold bg-[#0C0F1D]/82 backdrop-blur-md text-[#EEF1FA] px-2.5 py-1 rounded-full border border-[#8596D6]/30 truncate">
                         {attr.region}
@@ -233,10 +235,9 @@ export function ExploreTab({
                           }`}
                           title="Curtir lugar preferido"
                         >
-                          <Heart
-                            className={`w-3.5 h-3.5 ${
-                              isLikedByMe ? 'fill-white text-white' : 'text-[#F49797]'
-                            }`}
+                          <AnimeHeartIcon
+                            filled={isLikedByMe}
+                            className="w-4 h-4"
                           />
                           <span>{likesForPlace.length}</span>
                         </button>
@@ -273,18 +274,26 @@ export function ExploreTab({
 
                     {likesForPlace.length > 0 && (
                       <div className="mt-2.5 flex flex-wrap items-center gap-1 text-[11px]">
-                        <span className="text-[#F49797] font-bold">❤️</span>
+                        <AnimeHeartIcon className="w-3.5 h-3.5" />
                         {likesForPlace.map((like) => {
                           const isMe =
                             Boolean(normalizedMe) &&
                             like.voterName.trim().toLowerCase() === normalizedMe;
                           const badge = isMe ? avatarBadge : like.avatarBadge;
+                          const photo = isMe ? avatarPhoto : undefined;
                           return (
                             <span
                               key={like.id}
                               className="inline-flex items-center gap-1 bg-[#EC6B6B]/15 text-[#FFD0D0] border border-[#EC6B6B]/25 px-2 py-0.5 rounded-full font-medium"
                             >
-                              {badge && <span aria-hidden="true">{badge}</span>}
+                              {(photo || badge) && (
+                                <UserAvatar
+                                  photo={photo}
+                                  badge={badge || ''}
+                                  sizeClass="w-4 h-4"
+                                  textClass="text-[11px]"
+                                />
+                              )}
                               <span>{like.voterName}</span>
                             </span>
                           );

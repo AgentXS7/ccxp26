@@ -9,8 +9,14 @@ import {
   Train,
 } from 'lucide-react';
 import { handleImgError } from '../../lib/utils';
-import { CornerOrnaments, StarSparkleIcon } from '../ui/AnimeDecor';
+import {
+  AnimeDislikeIcon,
+  AnimeLikeIcon,
+  CornerOrnaments,
+  StarSparkleIcon,
+} from '../ui/AnimeDecor';
 import { OnigiriSticker, StickerForCategory } from '../ui/GameStickers';
+import { UserAvatar } from '../ui/UserAvatar';
 import type {
   AttractionMeta,
   DayBadgeType,
@@ -34,6 +40,7 @@ interface ItineraryTabProps {
   stopVotes: StopVoteEntry[];
   voterName: string;
   avatarBadge: string;
+  avatarPhoto?: string;
   compactCards: boolean;
   onOpenVoterModal: () => void;
   onVoteClick: (e: React.MouseEvent, stopId: string, choice: 'yes' | 'no') => void;
@@ -65,6 +72,7 @@ export function ItineraryTab({
   stopVotes,
   voterName,
   avatarBadge,
+  avatarPhoto,
   compactCards,
   onOpenVoterModal,
   onVoteClick,
@@ -76,20 +84,37 @@ export function ItineraryTab({
       {/* Barra de Identificação para Votação nas Atrações */}
       <div className="rounded-2xl hoyo-card hoyo-shimmer-top px-4 py-3 flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-xl bg-[#212847] border border-[#E5B869]/35 flex items-center justify-center text-base shrink-0">
-            {voterName.trim() ? avatarBadge : '🗳️'}
+          <span className="w-8 h-8 rounded-full bg-[#212847] border border-[#E5B869]/35 flex items-center justify-center overflow-hidden shrink-0">
+            {voterName.trim() ? (
+              <UserAvatar
+                photo={avatarPhoto}
+                badge={avatarBadge}
+                sizeClass="w-8 h-8"
+                textClass="text-base"
+              />
+            ) : (
+              <span className="text-base">🗳️</span>
+            )}
           </span>
           {voterName.trim() ? (
-            <p className="text-xs text-[#CBD2EC]">
-              Votando nas atrações como{' '}
-              <strong className="text-[#8AE5DB] font-extrabold">
-                {avatarBadge} {voterName}
+            <p className="text-xs text-[#CBD2EC] flex items-center gap-1.5 flex-wrap">
+              <span>Votando nas atrações como</span>
+              <strong className="inline-flex items-center gap-1 text-[#8AE5DB] font-extrabold">
+                {!avatarPhoto && <span aria-hidden="true">{avatarBadge}</span>}
+                <span>{voterName}</span>
               </strong>
             </p>
           ) : (
             <p className="text-xs text-[#CBD2EC]">
-              Clique em <strong className="text-[#8AE5DB]">👍 Sim</strong> ou{' '}
-              <strong className="text-[#F7A3A3]">👎 Não</strong> em qualquer atração para votar com seu nome
+              Clique em{' '}
+              <strong className="inline-flex items-center gap-1 text-[#8AE5DB]">
+                <AnimeLikeIcon className="w-3.5 h-3.5" /> Sim
+              </strong>{' '}
+              ou{' '}
+              <strong className="inline-flex items-center gap-1 text-[#F7A3A3]">
+                <AnimeDislikeIcon className="w-3.5 h-3.5" /> Não
+              </strong>{' '}
+              em qualquer atração para votar com seu nome
             </p>
           )}
         </div>
@@ -364,7 +389,7 @@ export function ItineraryTab({
                             />
                             <div className="relative flex items-center justify-between text-xs font-bold">
                               <span className="flex items-center gap-1.5">
-                                <span className="text-sm">👍</span> Sim
+                                <AnimeLikeIcon className="w-4 h-4" /> Sim
                               </span>
                               <span>{yesVotes.length}</span>
                             </div>
@@ -385,7 +410,7 @@ export function ItineraryTab({
                             />
                             <div className="relative flex items-center justify-between text-xs font-bold">
                               <span className="flex items-center gap-1.5">
-                                <span className="text-sm">👎</span> Não
+                                <AnimeDislikeIcon className="w-4 h-4" /> Não
                               </span>
                               <span>{noVotes.length}</span>
                             </div>
@@ -396,18 +421,26 @@ export function ItineraryTab({
                           <div className="pt-1 space-y-1 text-[11px]">
                             {yesVotes.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[#47C5B8] font-bold">👍</span>
+                                <AnimeLikeIcon className="w-3.5 h-3.5" />
                                 {yesVotes.map((v) => {
                                   const isMe =
                                     Boolean(normalizedMe) &&
                                     v.voterName.trim().toLowerCase() === normalizedMe;
                                   const badge = isMe ? avatarBadge : v.avatarBadge;
+                                  const photo = isMe ? avatarPhoto : undefined;
                                   return (
                                     <span
                                       key={v.id}
                                       className="inline-flex items-center gap-1 bg-[#47C5B8]/15 text-[#BFF4ED] border border-[#47C5B8]/25 px-2 py-0.5 rounded-full font-medium"
                                     >
-                                      {badge && <span aria-hidden="true">{badge}</span>}
+                                      {(photo || badge) && (
+                                        <UserAvatar
+                                          photo={photo}
+                                          badge={badge || ''}
+                                          sizeClass="w-4 h-4"
+                                          textClass="text-[11px]"
+                                        />
+                                      )}
                                       <span>{v.voterName}</span>
                                     </span>
                                   );
@@ -416,18 +449,26 @@ export function ItineraryTab({
                             )}
                             {noVotes.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[#EC6B6B] font-bold">👎</span>
+                                <AnimeDislikeIcon className="w-3.5 h-3.5" />
                                 {noVotes.map((v) => {
                                   const isMe =
                                     Boolean(normalizedMe) &&
                                     v.voterName.trim().toLowerCase() === normalizedMe;
                                   const badge = isMe ? avatarBadge : v.avatarBadge;
+                                  const photo = isMe ? avatarPhoto : undefined;
                                   return (
                                     <span
                                       key={v.id}
                                       className="inline-flex items-center gap-1 bg-[#EC6B6B]/15 text-[#FFD0D0] border border-[#EC6B6B]/25 px-2 py-0.5 rounded-full font-medium"
                                     >
-                                      {badge && <span aria-hidden="true">{badge}</span>}
+                                      {(photo || badge) && (
+                                        <UserAvatar
+                                          photo={photo}
+                                          badge={badge || ''}
+                                          sizeClass="w-4 h-4"
+                                          textClass="text-[11px]"
+                                        />
+                                      )}
                                       <span>{v.voterName}</span>
                                     </span>
                                   );

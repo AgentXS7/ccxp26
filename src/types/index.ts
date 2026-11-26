@@ -10,12 +10,35 @@ export type BudgetCategory =
   | 'Hospedagem'
   | 'Passeios';
 
-export type ThemePresetId = 'hoyolab' | 'geo' | 'anemo' | 'pyro';
+export type PersonalExpenseCategory = BudgetCategory | 'Compras & Extras';
+
+export interface PersonalExtraItem {
+  id: string;
+  category: PersonalExpenseCategory;
+  name: string;
+  notes?: string;
+  amount: number;
+  included: boolean;
+  paid?: boolean;
+  createdAt: string;
+}
+
+export interface PersonalBudgetState {
+  includedOverrides: Record<string, boolean>;
+  transportOverrides: Record<string, boolean>;
+  amountOverrides: Record<string, number>;
+  paidMap: Record<string, boolean>;
+  extraItems: PersonalExtraItem[];
+}
+
+export type ThemePresetId = 'hoyolab' | 'geo' | 'anemo' | 'pyro' | 'electro' | 'sakura';
 
 export interface UserPreferences {
   themePreset: ThemePresetId;
   compactCards: boolean;
   avatarBadge: string;
+  /** Foto de perfil opcional em Data URL compactada (salva no aparelho) */
+  avatarPhoto?: string;
   /** Mostrar mascote no canto (padrão: true) */
   showMascot?: boolean;
   /** Mostrar adesivos flutuando no fundo (padrão: true) */

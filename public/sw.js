@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sp2026-cache-v3';
+const CACHE_NAME = 'sp2026-cache-v4';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -7,8 +7,14 @@ const PRECACHE_URLS = [
   '/icon-512.png',
   '/apple-touch-icon.png',
   '/mascots/maga.png',
+  '/mascots/chegada.png',
+  '/mascots/checkin.png',
   '/mascots/gamer.png',
   '/mascots/lamen.png',
+  '/mascots/bichos.png',
+  '/mascots/masp.png',
+  '/mascots/bario.png',
+  '/mascots/retorno.png',
 ];
 
 self.addEventListener('install', (event) => {

@@ -9,13 +9,15 @@
     --border-subtle: rgba(133, 150, 214, 0.16);
     --border-gold: rgba(229, 184, 105, 0.34);
 
-    /* Tokens personalizáveis pelo usuário (padrão: HoYoLAB Periwinkle) */
+    /* Tokens personalizáveis pelo usuário (padrão: Expresso Astral) */
     --brand-accent: #657ef8;
     --brand-accent-hover: #798ffa;
     --brand-accent-soft: rgba(101, 126, 248, 0.15);
     --brand-accent-border: rgba(101, 126, 248, 0.42);
     --brand-gold: #e5b869;
     --brand-teal: #47c5b8;
+    --bg-glow-1: rgba(101, 126, 248, 0.15);
+    --bg-glow-2: rgba(229, 184, 105, 0.08);
   }
 
   [data-theme="geo"] {
@@ -23,6 +25,8 @@
     --brand-accent-hover: #ebb95e;
     --brand-accent-soft: rgba(223, 169, 74, 0.16);
     --brand-accent-border: rgba(223, 169, 74, 0.45);
+    --bg-glow-1: rgba(223, 169, 74, 0.14);
+    --bg-glow-2: rgba(71, 197, 184, 0.07);
   }
 
   [data-theme="anemo"] {
@@ -30,6 +34,8 @@
     --brand-accent-hover: #53d6c5;
     --brand-accent-soft: rgba(61, 198, 181, 0.16);
     --brand-accent-border: rgba(61, 198, 181, 0.45);
+    --bg-glow-1: rgba(61, 198, 181, 0.14);
+    --bg-glow-2: rgba(229, 184, 105, 0.07);
   }
 
   [data-theme="pyro"] {
@@ -37,6 +43,26 @@
     --brand-accent-hover: #f57e7e;
     --brand-accent-soft: rgba(236, 107, 107, 0.16);
     --brand-accent-border: rgba(236, 107, 107, 0.45);
+    --bg-glow-1: rgba(236, 107, 107, 0.14);
+    --bg-glow-2: rgba(229, 184, 105, 0.07);
+  }
+
+  [data-theme="electro"] {
+    --brand-accent: #a77bff;
+    --brand-accent-hover: #b994ff;
+    --brand-accent-soft: rgba(167, 123, 255, 0.16);
+    --brand-accent-border: rgba(167, 123, 255, 0.45);
+    --bg-glow-1: rgba(167, 123, 255, 0.16);
+    --bg-glow-2: rgba(71, 197, 184, 0.08);
+  }
+
+  [data-theme="sakura"] {
+    --brand-accent: #f082b2;
+    --brand-accent-hover: #f79ac3;
+    --brand-accent-soft: rgba(240, 130, 178, 0.16);
+    --brand-accent-border: rgba(240, 130, 178, 0.45);
+    --bg-glow-1: rgba(240, 130, 178, 0.15);
+    --bg-glow-2: rgba(101, 126, 248, 0.09);
   }
 
   html {
@@ -50,8 +76,8 @@
     margin: 0;
     background-color: var(--bg-canvas);
     background-image:
-      radial-gradient(900px 420px at 85% -10%, rgba(101, 126, 248, 0.14), transparent 65%),
-      radial-gradient(700px 360px at 10% 15%, rgba(229, 184, 105, 0.08), transparent 60%),
+      radial-gradient(900px 420px at 85% -10%, var(--bg-glow-1), transparent 65%),
+      radial-gradient(700px 360px at 10% 15%, var(--bg-glow-2), transparent 60%),
       radial-gradient(rgba(163, 180, 255, 0.09) 1px, transparent 1px);
     background-size: auto, auto, 26px 26px;
     background-attachment: fixed;
@@ -159,7 +185,7 @@
   }
 }
 .animate-car-drive {
-  animation: carDrive 14s linear infinite;
+  animation: carDrive 36s linear infinite;
 }
 
 .road-dashes {

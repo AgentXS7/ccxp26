@@ -20,6 +20,7 @@ import { readInitialSupabaseConfig } from './lib/supabase';
 import {
   copyTextFallback,
   getOrCreateDeviceToken,
+  getSaoPauloTodayIso,
   packDeviceTokenWithBadge,
   slugifyName,
 } from './lib/utils';
@@ -49,6 +50,7 @@ import type {
   ChecklistItem,
   ItineraryDay,
   ItineraryStop,
+  PersonalBudgetState,
   PlaceLikeEntry,
   RsvpEntry,
   ShiftType,
@@ -143,7 +145,7 @@ export default function App() {
     STORAGE_KEYS.BUDGET,
     INITIAL_BUDGET_ITEMS
   );
-  const [transportLegs, setTransportLegs] = usePersistedState<TransportLeg[]>(
+  const [transportLegs] = usePersistedState<TransportLeg[]>(
     STORAGE_KEYS.TRANSPORT,
     INITIAL_TRANSPORT_LEGS
   );
@@ -436,17 +438,34 @@ export default function App() {
     [rsvps]
   );
 
-  // Simulador Financeiro
+  // Simulador Financeiro + Controle Pessoal (salvo só no aparelho, imune ao sync do grupo)
   const [peoplePerCar, setPeoplePerCar] = useState<number>(4);
   const [useSurgePricing, setUseSurgePricing] = useState<boolean>(false);
+  const [personalBudget, setPersonalBudget] = usePersistedState<PersonalBudgetState>(
+    STORAGE_KEYS.PERSONAL_BUDGET,
+    {
+      includedOverrides: {},
+      transportOverrides: {},
+      amountOverrides: {},
+      paidMap: {},
+      extraItems: [],
+    }
+  );
 
   const financialSummary = useMemo(() => {
-    const transportTotal = transportLegs
-      .filter((leg) => leg.included)
-      .reduce((acc, leg) => {
-        const unitFare = useSurgePricing ? leg.uberSurge : leg.uberAvg;
-        return acc + (unitFare * leg.tripsCount) / Math.max(1, peoplePerCar);
-      }, 0);
+    let paidTotal = 0;
+
+    const transportTotal = transportLegs.reduce((acc, leg) => {
+      const isIncluded =
+        personalBudget.transportOverrides[leg.id] !== undefined
+          ? personalBudget.transportOverrides[leg.id]
+          : leg.included;
+      if (!isIncluded) return acc;
+      const unitFare = useSurgePricing ? leg.uberSurge : leg.uberAvg;
+      const legCost = (unitFare * leg.tripsCount) / Math.max(1, peoplePerCar);
+      if (personalBudget.paidMap[leg.id]) paidTotal += legCost;
+      return acc + legCost;
+    }, 0);
 
     const byCategory: Record<BudgetCategory, { documentedTotal: number; pendingCount: number }> = {
       Transporte: { documentedTotal: transportTotal, pendingCount: 0 },
@@ -456,29 +475,65 @@ export default function App() {
       Passeios: { documentedTotal: 0, pendingCount: 0 },
     };
 
-    budgetItems
-      .filter((item) => item.included)
-      .forEach((item) => {
-        if (item.amountPerPerson === null) {
-          byCategory[item.category].pendingCount += 1;
-        } else {
-          byCategory[item.category].documentedTotal += item.amountPerPerson;
-        }
-      });
+    budgetItems.forEach((item) => {
+      const isIncluded =
+        personalBudget.includedOverrides[item.id] !== undefined
+          ? personalBudget.includedOverrides[item.id]
+          : item.included;
+      if (!isIncluded) return;
 
-    if (config.airbnbTotalCost !== null && config.airbnbTotalCost > 0) {
-      const divisor = Math.max(1, confirmedFriends.length);
-      byCategory.Hospedagem.documentedTotal += config.airbnbTotalCost / divisor;
-    } else {
-      byCategory.Hospedagem.pendingCount += 1;
+      const effectiveAmount =
+        personalBudget.amountOverrides[item.id] !== undefined
+          ? personalBudget.amountOverrides[item.id]
+          : item.amountPerPerson;
+
+      if (effectiveAmount === null) {
+        byCategory[item.category].pendingCount += 1;
+      } else {
+        byCategory[item.category].documentedTotal += effectiveAmount;
+        if (personalBudget.paidMap[item.id]) paidTotal += effectiveAmount;
+      }
+    });
+
+    const airbnbOverride = personalBudget.amountOverrides['airbnb-base'];
+    const airbnbIncluded =
+      personalBudget.includedOverrides['airbnb-base'] !== undefined
+        ? personalBudget.includedOverrides['airbnb-base']
+        : true;
+    if (airbnbIncluded) {
+      if (airbnbOverride !== undefined) {
+        byCategory.Hospedagem.documentedTotal += airbnbOverride;
+        if (personalBudget.paidMap['airbnb-base']) paidTotal += airbnbOverride;
+      } else if (config.airbnbTotalCost !== null && config.airbnbTotalCost > 0) {
+        const divisor = Math.max(1, confirmedFriends.length);
+        const share = config.airbnbTotalCost / divisor;
+        byCategory.Hospedagem.documentedTotal += share;
+        if (personalBudget.paidMap['airbnb-base']) paidTotal += share;
+      } else {
+        byCategory.Hospedagem.pendingCount += 1;
+      }
     }
+
+    let shoppingExtrasTotal = 0;
+    let allExtrasTotal = 0;
+    personalBudget.extraItems.forEach((extra) => {
+      if (!extra.included) return;
+      allExtrasTotal += extra.amount;
+      if (extra.paid) paidTotal += extra.amount;
+      if (extra.category === 'Compras & Extras') {
+        shoppingExtrasTotal += extra.amount;
+      } else {
+        byCategory[extra.category].documentedTotal += extra.amount;
+      }
+    });
 
     const grandTotal =
       byCategory.Transporte.documentedTotal +
       byCategory.Alimentação.documentedTotal +
       byCategory.Ingressos.documentedTotal +
       byCategory.Hospedagem.documentedTotal +
-      byCategory.Passeios.documentedTotal;
+      byCategory.Passeios.documentedTotal +
+      shoppingExtrasTotal;
 
     const totalPendingItems =
       byCategory.Alimentação.pendingCount +
@@ -486,7 +541,14 @@ export default function App() {
       byCategory.Hospedagem.pendingCount +
       byCategory.Passeios.pendingCount;
 
-    return { byCategory, grandTotal, totalPendingItems };
+    return {
+      byCategory,
+      shoppingExtrasTotal,
+      allExtrasTotal,
+      paidTotal,
+      grandTotal,
+      totalPendingItems,
+    };
   }, [
     transportLegs,
     useSurgePricing,
@@ -494,6 +556,7 @@ export default function App() {
     budgetItems,
     config.airbnbTotalCost,
     confirmedFriends.length,
+    personalBudget,
   ]);
 
   // Compartilhamento
@@ -561,8 +624,11 @@ export default function App() {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
-  // Roteiro
-  const [selectedDate, setSelectedDate] = useState<string>('2026-12-05');
+  // Roteiro (se já estivermos durante a viagem, abre direto no dia de hoje)
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = getSaoPauloTodayIso();
+    return INITIAL_DAYS.some((d) => d.date === today) ? today : '2026-12-05';
+  });
   const [shiftFilter, setShiftFilter] = useState<'Todos' | ShiftType>('Todos');
   const [selectedAttraction, setSelectedAttraction] = useState<AttractionMeta | null>(null);
 
@@ -802,6 +868,7 @@ export default function App() {
         }}
         voterName={voterName}
         avatarBadge={userPrefs.avatarBadge}
+        avatarPhoto={userPrefs.avatarPhoto}
         onOpenVoterModal={openVoterModal}
         onOpenThemeModal={() => setThemeModalOpen(true)}
         onCopyLink={handleCopyOnlyLink}
@@ -836,6 +903,8 @@ export default function App() {
         {activeTab === 'inicio' && (
           <HomeTab
             config={config}
+            days={days}
+            attractions={attractions}
             daysUntilTrip={daysUntilTrip}
             isStandaloneApp={isStandaloneApp}
             appIconUrl={appIconUrl}
@@ -848,6 +917,7 @@ export default function App() {
             uniqueVotersCount={uniqueVoters.length}
             voterName={voterName}
             avatarBadge={userPrefs.avatarBadge}
+            avatarPhoto={userPrefs.avatarPhoto}
             setActiveTab={setActiveTab}
             onJumpToDay={(date) => {
               setSelectedDate(date);
@@ -871,6 +941,7 @@ export default function App() {
             stopVotes={stopVotes}
             voterName={voterName}
             avatarBadge={userPrefs.avatarBadge}
+            avatarPhoto={userPrefs.avatarPhoto}
             compactCards={userPrefs.compactCards}
             onOpenVoterModal={openVoterModal}
             onVoteClick={handleVoteClick}
@@ -897,6 +968,7 @@ export default function App() {
             placeLikes={placeLikes}
             voterName={voterName}
             avatarBadge={userPrefs.avatarBadge}
+            avatarPhoto={userPrefs.avatarPhoto}
             peoplePerCar={peoplePerCar}
             compactCards={userPrefs.compactCards}
             onOpenAddPlace={() => setAddPlaceModalOpen(true)}
@@ -915,9 +987,10 @@ export default function App() {
             setUseSurgePricing={setUseSurgePricing}
             financialSummary={financialSummary}
             transportLegs={transportLegs}
-            setTransportLegs={setTransportLegs}
             budgetItems={budgetItems}
-            setBudgetItems={setBudgetItems}
+            personalBudget={personalBudget}
+            setPersonalBudget={setPersonalBudget}
+            showToast={showToast}
           />
         )}
 
@@ -1009,6 +1082,10 @@ export default function App() {
         avatarBadge={userPrefs.avatarBadge}
         setAvatarBadge={(badge) =>
           setUserPrefs((prev) => ({ ...prev, avatarBadge: badge }))
+        }
+        avatarPhoto={userPrefs.avatarPhoto}
+        setAvatarPhoto={(photo) =>
+          setUserPrefs((prev) => ({ ...prev, avatarPhoto: photo }))
         }
         onSubmit={handleConfirmVoterName}
       />

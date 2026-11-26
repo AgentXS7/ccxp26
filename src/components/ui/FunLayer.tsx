@@ -12,6 +12,7 @@ import {
   PixelGhostSticker,
   PixelHeartSticker,
   RamenSticker,
+  SpaceshipSticker,
   SparkleSticker,
 } from './GameStickers';
 
@@ -71,9 +72,9 @@ export function RoadCarStrip({ label }: { label?: string }) {
           </span>
         ))}
       </div>
-      {/* Carrinho */}
+      {/* Nave espacial astral deslizando bem devagar */}
       <div className="absolute top-1/2 -translate-y-1/2 animate-car-drive" aria-hidden="true">
-        <CarSticker className="w-11 h-8 drop-shadow-lg" />
+        <SpaceshipSticker className="w-12 h-8 drop-shadow-lg" />
       </div>
       {label && (
         <span className="sr-only">{label}</span>
@@ -258,15 +259,39 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
 /*  Mini galeria de "party" — usada no hero                                   */
 /* -------------------------------------------------------------------------- */
 
-export function HeroStickerCluster() {
+export type HeroMascotId =
+  | 'maga'
+  | 'chegada'
+  | 'checkin'
+  | 'gamer'
+  | 'lamen'
+  | 'bichos'
+  | 'masp'
+  | 'bario'
+  | 'retorno';
+
+const HERO_MASCOT_IMG: Record<HeroMascotId, string> = {
+  maga: '/mascots/maga.png',
+  chegada: '/mascots/chegada.png',
+  checkin: '/mascots/checkin.png',
+  gamer: '/mascots/gamer.png',
+  lamen: '/mascots/lamen.png',
+  bichos: '/mascots/bichos.png',
+  masp: '/mascots/masp.png',
+  bario: '/mascots/bario.png',
+  retorno: '/mascots/retorno.png',
+};
+
+export function HeroStickerCluster({ mascotId = 'maga' }: { mascotId?: HeroMascotId }) {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1]">
-      {/* Maga Lumi espiando no hero */}
+      {/* Mascote do dia espiando no hero */}
       <img
-        src="/mascots/maga.png"
+        key={mascotId}
+        src={HERO_MASCOT_IMG[mascotId]}
         alt=""
         onError={(e) => (e.currentTarget.style.display = 'none')}
-        className="absolute right-1 top-12 w-24 h-24 sm:top-auto sm:bottom-2 sm:right-4 sm:w-44 sm:h-44 object-contain drop-shadow-[0_14px_22px_rgba(0,0,0,0.7)] rotate-3"
+        className="absolute right-1 top-12 w-24 h-24 sm:top-auto sm:bottom-3 sm:right-4 sm:w-44 sm:h-44 object-contain drop-shadow-[0_14px_22px_rgba(0,0,0,0.7)] rotate-3 animate-fade-in"
         draggable={false}
       />
       <div className="absolute top-14 right-24 sm:top-14 sm:right-48 rotate-12 animate-sticker-float">

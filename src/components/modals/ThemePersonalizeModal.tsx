@@ -3,6 +3,7 @@ import { Check, Palette, Sparkles, X } from 'lucide-react';
 import { AVATAR_BADGES, THEME_PRESETS } from '../../lib/theme';
 import type { UserPreferences } from '../../types';
 import { HoyoDialog } from '../ui/HoyoDialog';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface ThemePersonalizeModalProps {
   open: boolean;
@@ -55,15 +56,20 @@ export function ThemePersonalizeModal({
         {/* Perfil rápido */}
         <div className="rounded-2xl hoyo-card-inner p-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="w-10 h-10 rounded-xl bg-[#212847] border border-[#E5B869]/40 flex items-center justify-center text-lg shrink-0">
-              {prefs.avatarBadge}
+            <span className="w-10 h-10 rounded-full bg-[#212847] border border-[#E5B869]/40 flex items-center justify-center overflow-hidden shrink-0">
+              <UserAvatar
+                photo={prefs.avatarPhoto}
+                badge={prefs.avatarBadge}
+                sizeClass="w-10 h-10"
+                textClass="text-lg"
+              />
             </span>
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate">
                 {voterName.trim() ? voterName : 'Nome ainda não definido'}
               </p>
               <p className="text-[11px] text-[#9BA3C2]">
-                Identificação nos votos e favoritos
+                Foto opcional, ícone e nome nos votos
               </p>
             </div>
           </div>
@@ -75,7 +81,7 @@ export function ThemePersonalizeModal({
             }}
             className="text-xs font-bold hoyo-accent-pill border px-3 py-1.5 rounded-xl shrink-0"
           >
-            Editar nome
+            Editar perfil
           </button>
         </div>
 
@@ -104,7 +110,7 @@ export function ThemePersonalizeModal({
         <div className="space-y-2">
           <span className="text-xs font-bold text-[#CBD2EC] flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[#E5B869]" />
-            Cor de Destaque (Estilo HoYoLAB)
+            Tema de Anime &amp; Jogos
           </span>
           <div className="grid grid-cols-2 gap-2.5">
             {THEME_PRESETS.map((preset) => {

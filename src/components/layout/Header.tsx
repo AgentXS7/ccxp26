@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { SyncStatus } from '../../hooks/useSupabaseSync';
 import type { TabKey } from '../../types';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface HeaderProps {
   activeTab: TabKey;
@@ -28,6 +29,7 @@ interface HeaderProps {
   onSyncClick: () => void;
   voterName: string;
   avatarBadge: string;
+  avatarPhoto?: string;
   onOpenVoterModal: () => void;
   onOpenThemeModal: () => void;
   onCopyLink: () => void;
@@ -54,6 +56,7 @@ export function Header({
   onSyncClick,
   voterName,
   avatarBadge,
+  avatarPhoto,
   onOpenVoterModal,
   onOpenThemeModal,
   onCopyLink,
@@ -180,17 +183,20 @@ export function Header({
             )}
           </button>
 
-          {/* Identificação do Viajante */}
+          {/* Identificação do Viajante (Perfil compacto: foto opcional + nome) */}
           <button
             type="button"
             onClick={onOpenVoterModal}
-            className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-2 rounded-xl bg-[#171C33] border border-[#8596D6]/20 text-[#EEF1FA] hover:border-[#E5B869]/45 transition max-w-[120px] sm:max-w-none shrink-0"
-            title="Definir ou trocar seu nome e ícone nos votos"
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1.5 rounded-xl bg-[#171C33] border border-[#8596D6]/20 text-[#EEF1FA] hover:border-[#E5B869]/45 transition max-w-[120px] sm:max-w-none shrink-0"
+            title="Seu perfil (foto opcional e nome)"
           >
-            <span className="shrink-0" aria-hidden="true">
-              {avatarBadge}
-            </span>
-            <span className="truncate">{voterName.trim() ? voterName : 'Nome'}</span>
+            <UserAvatar
+              photo={avatarPhoto}
+              badge={avatarBadge}
+              sizeClass="w-5 h-5"
+              textClass="text-xs"
+            />
+            <span className="truncate">{voterName.trim() ? voterName : 'Perfil'}</span>
           </button>
 
           {/* Copiar Link */}

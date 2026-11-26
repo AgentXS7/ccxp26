@@ -139,3 +139,122 @@ export function ArcadeTicketEmblem({ className = 'w-12 h-12' }: { className?: st
     </svg>
   );
 }
+
+/**
+ * Coração estilizado anime/HoYoLAB (substitui ❤️ nativo)
+ */
+export function AnimeHeartIcon({
+  className = 'w-4 h-4',
+  filled = true,
+}: {
+  className?: string;
+  filled?: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`inline-block shrink-0 align-[-0.15em] ${className}`}
+      aria-hidden="true"
+    >
+      <path
+        d="M12 20.6s-7.4-4.7-9.2-8.9C1.4 8.5 3.4 4.8 7 4.5c2-.2 3.8.9 5 2.5 1.2-1.6 3-2.7 5-2.5 3.6.3 5.6 4 4.2 7.2-1.8 4.2-9.2 8.9-9.2 8.9Z"
+        fill={filled ? 'url(#animeHeartGrad)' : 'rgba(236,107,107,0.16)'}
+        stroke={filled ? '#FFB5C5' : '#F49797'}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {filled && (
+        <path
+          d="M7.2 7.8c-.9.4-1.6 1.3-1.7 2.3"
+          stroke="#FFF2F5"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          opacity="0.85"
+        />
+      )}
+      <defs>
+        <linearGradient id="animeHeartGrad" x1="4" y1="4" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FF7A9C" />
+          <stop offset="0.55" stopColor="#EC5578" />
+          <stop offset="1" stopColor="#C93B62" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/**
+ * Like minimalista HoYoLAB (selo dourado arredondado com check)
+ */
+export function AnimeLikeIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`inline-block shrink-0 align-[-0.15em] ${className}`}
+      aria-hidden="true"
+    >
+      <rect
+        x="2.2"
+        y="2.2"
+        width="19.6"
+        height="19.6"
+        rx="6.5"
+        fill="url(#hoyoLikeBg)"
+        stroke="#F6D794"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M7.5 12.6 10.6 15.6 16.7 8.8"
+        stroke="#FFF9E6"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <defs>
+        <linearGradient id="hoyoLikeBg" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#E5B869" />
+          <stop offset="1" stopColor="#B8822F" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/**
+ * Dislike minimalista HoYoLAB (selo índigo/prata suave com X arredondado)
+ */
+export function AnimeDislikeIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`inline-block shrink-0 align-[-0.15em] ${className}`}
+      aria-hidden="true"
+    >
+      <rect
+        x="2.2"
+        y="2.2"
+        width="19.6"
+        height="19.6"
+        rx="6.5"
+        fill="url(#hoyoDislikeBg)"
+        stroke="#A4B0DE"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M9 9l6 6M15 9l-6 6"
+        stroke="#EEF1FA"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <defs>
+        <linearGradient id="hoyoDislikeBg" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#4A5582" />
+          <stop offset="1" stopColor="#2B3254" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}

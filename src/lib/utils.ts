@@ -118,3 +118,56 @@ export function unpackDeviceToken(raw?: string): {
     avatarBadge: avatarBadge || undefined,
   };
 }
+
+/**
+ * Redimensiona e recorta (quadrado central) uma foto de perfil para Data URL leve (~4–8 KB),
+ * ideal para salvar no localStorage e exibir no app sem pesar.
+ */
+export function compressAvatarImage(file: File, size = 128): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo de imagem inválido.'));
+      img.onload = () => {
+        const minSide = Math.min(img.width, img.height);
+        const sx = Math.max(0, (img.width - minSide) / 2);
+        const sy = Math.max(0, (img.height - minSide) / 2);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas indisponível.'));
+          return;
+        }
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Retorna a data atual no fuso horário de São Paulo no formato YYYY-MM-DD.
+ */
+export function getSaoPauloTodayIso(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+}
