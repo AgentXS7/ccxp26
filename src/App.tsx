@@ -15,7 +15,10 @@ import { usePersistedState } from './hooks/usePersistedState';
 import { usePwa } from './hooks/usePwa';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 
-import { compareStopsChronologically } from './lib/scheduleUtils';
+import {
+  compareStopsChronologically,
+  validateAndNormalizeTimeInput,
+} from './lib/scheduleUtils';
 import { buildShareableUrl, isLocalOrPreviewUrl } from './lib/sharing';
 import { STORAGE_KEYS } from './lib/storage';
 import { readInitialSupabaseConfig } from './lib/supabase';
@@ -1241,6 +1244,7 @@ export default function App() {
     title: '',
     subtitle: '',
     details: '',
+    attractionId: '',
   });
 
   const [newBudgetForm, setNewBudgetForm] = useState({
@@ -1273,18 +1277,36 @@ export default function App() {
     e.preventDefault();
     if (!isAdminAuthenticated) return;
     if (!newStopForm.title.trim()) return;
+    const timeValidation = validateAndNormalizeTimeInput(newStopForm.timeLabel);
+    if (!timeValidation.valid) return;
+
+    const linkedAttr = newStopForm.attractionId
+      ? attractions.find((a) => a.id === newStopForm.attractionId)
+      : undefined;
+
     const created: ItineraryStop = {
       id: 'stop_custom_' + Date.now().toString(36),
       dayDate: newStopForm.dayDate,
       shift: newStopForm.shift,
-      timeLabel: newStopForm.timeLabel.trim() || 'Horário flexível',
+      timeLabel: timeValidation.normalizedLabel,
       title: newStopForm.title.trim(),
       subtitle: newStopForm.subtitle.trim() || undefined,
-      tags: ['Adicionado'],
-      details: newStopForm.details.trim() || 'Atividade adicionada ao roteiro.',
+      attractionId: linkedAttr?.id || undefined,
+      tags: linkedAttr ? [linkedAttr.category] : ['Adicionado'],
+      details:
+        newStopForm.details.trim() ||
+        linkedAttr?.notes ||
+        'Atividade adicionada ao roteiro.',
     };
     setStops((prev) => [...prev, created]);
-    setNewStopForm({ ...newStopForm, timeLabel: '', title: '', subtitle: '', details: '' });
+    setNewStopForm({
+      ...newStopForm,
+      timeLabel: '',
+      title: '',
+      subtitle: '',
+      details: '',
+      attractionId: '',
+    });
     showToast('Nova parada adicionada ao roteiro!');
   };
 

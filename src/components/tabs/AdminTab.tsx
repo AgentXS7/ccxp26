@@ -23,7 +23,6 @@ import type {
   ItineraryStop,
   MemberCloudProfile,
   PlaceLikeEntry,
-  ShiftType,
   StopVoteEntry,
   TransportLeg,
   TripConfig,
@@ -32,6 +31,7 @@ import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from '../ui/AnimeDeco
 import { UserAvatar } from '../ui/UserAvatar';
 
 import { AdminLugaresSection } from './AdminLugaresSection';
+import { AdminRoteiroSection, type NewStopFormState } from './AdminRoteiroSection';
 
 export type AdminSectionKey =
   | 'rsvps'
@@ -70,24 +70,8 @@ interface AdminTabProps {
   setAdminSection: (s: AdminSectionKey) => void;
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
-  newStopForm: {
-    dayDate: string;
-    shift: ShiftType;
-    timeLabel: string;
-    title: string;
-    subtitle: string;
-    details: string;
-  };
-  setNewStopForm: React.Dispatch<
-    React.SetStateAction<{
-      dayDate: string;
-      shift: ShiftType;
-      timeLabel: string;
-      title: string;
-      subtitle: string;
-      details: string;
-    }>
-  >;
+  newStopForm: NewStopFormState;
+  setNewStopForm: React.Dispatch<React.SetStateAction<NewStopFormState>>;
   newBudgetForm: {
     category: BudgetCategory;
     name: string;
@@ -952,129 +936,17 @@ export function AdminTab({
 
       {/* ADMIN 4: ROTEIRO */}
       {adminSection === 'roteiro' && (
-        <div className="rounded-3xl hoyo-card p-5 space-y-5">
-          {isAdminAuthenticated && (
-            <>
-              <h3 className="text-base font-bold text-white">
-                Adicionar Nova Parada ao Roteiro
-              </h3>
-
-              <form onSubmit={onAddStop} className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <select
-                    value={newStopForm.dayDate}
-                    onChange={(e) =>
-                      setNewStopForm({ ...newStopForm, dayDate: e.target.value })
-                    }
-                    className="hoyo-card-inner rounded-xl px-3 py-2.5 text-xs text-white"
-                  >
-                    {days.map((d) => (
-                      <option key={d.date} value={d.date} className="bg-[#14192D]">
-                        {d.shortLabel} ({d.weekday}) — {d.title}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={newStopForm.shift}
-                    onChange={(e) =>
-                      setNewStopForm({
-                        ...newStopForm,
-                        shift: e.target.value as ShiftType,
-                      })
-                    }
-                    className="hoyo-card-inner rounded-xl px-3 py-2.5 text-xs text-white"
-                  >
-                    <option value="Manhã e Almoço" className="bg-[#14192D]">
-                      Manhã e Almoço
-                    </option>
-                    <option value="Tarde" className="bg-[#14192D]">
-                      Tarde
-                    </option>
-                    <option value="Noite e Madrugada" className="bg-[#14192D]">
-                      Noite e Madrugada
-                    </option>
-                  </select>
-
-                  <input
-                    type="text"
-                    value={newStopForm.timeLabel}
-                    onChange={(e) =>
-                      setNewStopForm({ ...newStopForm, timeLabel: e.target.value })
-                    }
-                    placeholder="Horário (ex: 16h00 – 18h00)"
-                    className="hoyo-card-inner rounded-xl px-3 py-2.5 text-xs text-white"
-                  />
-                </div>
-
-                <input
-                  type="text"
-                  value={newStopForm.title}
-                  onChange={(e) =>
-                    setNewStopForm({ ...newStopForm, title: e.target.value })
-                  }
-                  placeholder="Título da parada (ex: Café na Liberdade)"
-                  className="w-full hoyo-card-inner rounded-xl px-3 py-2.5 text-xs text-white"
-                />
-
-                <textarea
-                  rows={2}
-                  value={newStopForm.details}
-                  onChange={(e) =>
-                    setNewStopForm({ ...newStopForm, details: e.target.value })
-                  }
-                  placeholder="Observações e dicas para o grupo..."
-                  className="w-full hoyo-card-inner rounded-xl px-3 py-2.5 text-xs text-white"
-                />
-
-                <button
-                  type="submit"
-                  className="hoyo-accent-btn font-bold text-xs px-4 py-2.5 rounded-xl inline-flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" /> Adicionar ao Roteiro
-                </button>
-              </form>
-            </>
-          )}
-
-          <div
-            className={
-              isAdminAuthenticated ? 'pt-4 border-t border-[#8596D6]/15 space-y-2' : 'space-y-2'
-            }
-          >
-            <p className="text-xs font-bold text-[#9BA3C2]">
-              Paradas cadastradas no cronograma ({stops.length})
-            </p>
-            <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
-              {stops.map((s) => (
-                <div
-                  key={s.id}
-                  className="rounded-xl hoyo-card-inner px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <span className="text-[#8CA0FF] font-bold">
-                      {s.dayDate.slice(8, 10)}/12 • {s.shift} •{' '}
-                    </span>
-                    <span className="text-white font-semibold">{s.title}</span>
-                  </div>
-                  {isAdminAuthenticated && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStops((prev) => prev.filter((item) => item.id !== s.id));
-                        showToast('Parada removida do roteiro.');
-                      }}
-                      className="text-[#F49797] hover:text-white shrink-0 p-1"
-                      title="Remover parada"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <AdminRoteiroSection
+          days={days}
+          attractions={attractions}
+          stops={stops}
+          setStops={setStops}
+          isAdminAuthenticated={isAdminAuthenticated}
+          newStopForm={newStopForm}
+          setNewStopForm={setNewStopForm}
+          onAddStop={onAddStop}
+          showToast={showToast}
+        />
       )}
 
       {/* ADMIN 4B: LUGARES DO EXPLORAR */}

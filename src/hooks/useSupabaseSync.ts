@@ -111,6 +111,30 @@ export function useSupabaseSync({
   const showToastRef = useRef(showToast);
   showToastRef.current = showToast;
 
+  const hasPendingAdminPushRef = useRef<boolean>(false);
+  const adminSyncHoldUntilRef = useRef<number>(0);
+  const lastAdminPushCompletedAtRef = useRef<number>(0);
+  const lastSharedSnapshotRef = useRef<string>('');
+
+  const sharedStateSnapshot = JSON.stringify({
+    airbnbTotalCost: config.airbnbTotalCost,
+    arrivalWindowNote: config.arrivalWindowNote,
+    checklist,
+    budgetItems,
+    stops,
+    transportLegs,
+  });
+
+  if (
+    isAdminAuthenticated &&
+    hasSupabase &&
+    lastSharedSnapshotRef.current !== '' &&
+    lastSharedSnapshotRef.current !== sharedStateSnapshot
+  ) {
+    hasPendingAdminPushRef.current = true;
+    adminSyncHoldUntilRef.current = Date.now() + 5000;
+  }
+
   const cloudFetch = useCallback(
     (path: string, options: RequestInit = {}) =>
       sbFetch(cleanSbUrl, cleanSbKey, path, options),
@@ -257,6 +281,12 @@ export function useSupabaseSync({
           }
         }
 
+        const syncStartedAt = Date.now();
+        const shouldSkipSharedOverwrite = () =>
+          hasPendingAdminPushRef.current ||
+          Date.now() < adminSyncHoldUntilRef.current ||
+          syncStartedAt < lastAdminPushCompletedAtRef.current;
+
         const [votesRows, likesRows, placesRows, sharedRows] = await Promise.all([
           cloudFetch('stop_votes?select=*'),
           cloudFetch('place_likes?select=*'),
@@ -384,8 +414,9 @@ export function useSupabaseSync({
           });
 
           setRemovedPlaceIds(nextRemovedIds);
-          if (cloudTransportLegs !== null) {
+          if (cloudTransportLegs !== null && !shouldSkipSharedOverwrite()) {
             setTransportLegs(cloudTransportLegs);
+            lastSharedSnapshotRef.current = '';
           }
           const removedSet = new Set(nextRemovedIds);
 
@@ -424,7 +455,7 @@ export function useSupabaseSync({
           });
         }
 
-        if (Array.isArray(sharedRows) && sharedRows.length > 0) {
+        if (Array.isArray(sharedRows) && sharedRows.length > 0 && !shouldSkipSharedOverwrite()) {
           const shared = sharedRows[0] as {
             airbnb_total_cost?: number | null;
             arrival_window_note?: string | null;
@@ -456,6 +487,7 @@ export function useSupabaseSync({
                 ? shared.arrival_window_note
                 : prev.arrivalWindowNote,
           }));
+          lastSharedSnapshotRef.current = '';
         }
 
         setSyncStatus('synced');
@@ -640,12 +672,17 @@ export function useSupabaseSync({
     const interval = setInterval(() => {
       syncFromCloud(true);
     }, 8000);
-    const onFocus = () => syncFromCloud(true);
+    let focusTimer: number | null = null;
+    const onFocus = () => {
+      if (focusTimer) window.clearTimeout(focusTimer);
+      focusTimer = window.setTimeout(() => syncFromCloud(true), 250);
+    };
     const onOnline = () => syncFromCloud(false);
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
     return () => {
       clearInterval(interval);
+      if (focusTimer) window.clearTimeout(focusTimer);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onOnline);
     };
@@ -653,6 +690,8 @@ export function useSupabaseSync({
 
   const pushSharedStateToCloud = useCallback(async () => {
     if (!hasSupabase) return;
+    hasPendingAdminPushRef.current = true;
+    adminSyncHoldUntilRef.current = Date.now() + 5000;
     try {
       await Promise.all([
         cloudFetch('trip_shared_state?on_conflict=id', {
@@ -682,18 +721,24 @@ export function useSupabaseSync({
           }),
         }),
       ]);
+      lastSharedSnapshotRef.current = sharedStateSnapshot;
+      lastAdminPushCompletedAtRef.current = Date.now();
+      adminSyncHoldUntilRef.current = Date.now() + 2500;
+      hasPendingAdminPushRef.current = false;
       setSyncStatus('synced');
       setSyncErrorDetail('');
       setLastSyncedAt(
         new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
       );
     } catch (err) {
+      hasPendingAdminPushRef.current = false;
       setSyncStatus('error');
       setSyncErrorDetail(err instanceof Error ? err.message : 'Erro ao salvar');
     }
   }, [
     hasSupabase,
     cloudFetch,
+    sharedStateSnapshot,
     config.airbnbTotalCost,
     config.arrivalWindowNote,
     checklist,
@@ -704,12 +749,24 @@ export function useSupabaseSync({
 
   // Envia automaticamente alterações do organizador para o Supabase
   useEffect(() => {
-    if (!isAdminAuthenticated || !hasSupabase) return;
+    if (!isAdminAuthenticated || !hasSupabase) {
+      lastSharedSnapshotRef.current = '';
+      return;
+    }
+    if (lastSharedSnapshotRef.current === '') {
+      lastSharedSnapshotRef.current = sharedStateSnapshot;
+      return;
+    }
+    if (lastSharedSnapshotRef.current === sharedStateSnapshot) {
+      return;
+    }
+    hasPendingAdminPushRef.current = true;
+    adminSyncHoldUntilRef.current = Date.now() + 5000;
     const timer = setTimeout(() => {
       pushSharedStateToCloud();
-    }, 650);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [isAdminAuthenticated, hasSupabase, pushSharedStateToCloud]);
+  }, [isAdminAuthenticated, hasSupabase, sharedStateSnapshot, pushSharedStateToCloud]);
 
   const pushAllLocalToCloud = async () => {
     if (!hasSupabase) {

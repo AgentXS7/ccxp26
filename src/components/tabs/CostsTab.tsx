@@ -200,7 +200,7 @@ export function CostsTab({
     setExtraNotes('');
     setExtraPaid(false);
     setShowAddForm(false);
-    showToast(`"${cleanName}" adicionado ao seu controle pessoal!`);
+    showToast(`"${cleanName}" adicionado em ${extraCategory}!`);
   };
 
   const toggleExtraIncluded = (id: string) => {
@@ -254,6 +254,72 @@ export function CostsTab({
   const airbnbPaid = Boolean(personalBudget.paidMap['airbnb-base']);
 
   const transportBudgetItems = budgetItems.filter((i) => i.category === 'Transporte');
+  const transportExtras = personalBudget.extraItems.filter(
+    (ex) => ex.category === 'Transporte'
+  );
+  const shoppingExtras = personalBudget.extraItems.filter(
+    (ex) => ex.category === 'Compras & Extras'
+  );
+
+  const renderExtraItemRow = (extra: PersonalExtraItem) => (
+    <div
+      key={extra.id}
+      className={`flex items-start justify-between gap-3 rounded-2xl hoyo-card-inner border-[#E5B869]/20 p-3.5 transition ${
+        !extra.included ? 'opacity-55' : ''
+      }`}
+    >
+      <div className="flex items-start gap-3 min-w-0">
+        <input
+          type="checkbox"
+          checked={extra.included}
+          onChange={() => toggleExtraIncluded(extra.id)}
+          aria-label={`Incluir ${extra.name}`}
+          className="mt-1 rounded w-4 h-4 shrink-0 cursor-pointer"
+        />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs sm:text-sm font-bold text-white">{extra.name}</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded hoyo-accent-pill border">
+              Meu extra
+            </span>
+          </div>
+          {extra.notes && (
+            <span className="text-[11px] text-[#9BA3C2] mt-0.5 block">{extra.notes}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        {extra.included && (
+          <button
+            type="button"
+            onClick={() => toggleExtraPaid(extra.id)}
+            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
+              extra.paid
+                ? 'bg-[#47C5B8]/20 border-[#47C5B8]/45 text-[#8AE5DB]'
+                : 'bg-[#171C33] border-[#8596D6]/20 text-[#9BA3C2] hover:text-white'
+            }`}
+          >
+            {extra.paid ? '✓ Pago' : 'Pagar?'}
+          </button>
+        )}
+
+        <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-[#1F2644] text-white">
+          {formatBRL(extra.amount)}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => removeExtra(extra.id)}
+          aria-label={`Remover ${extra.name}`}
+          title="Remover custo extra"
+          className="p-1.5 rounded-lg text-[#9BA3C2] hover:text-[#FFB5B5] hover:bg-[#EC6B6B]/15 transition"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
 
   const renderBudgetItemRow = (item: BudgetItem) => {
     const isIncluded =
@@ -596,6 +662,9 @@ export function CostsTab({
             ] as BudgetCategory[]
           ).map((cat) => {
             const data = financialSummary.byCategory[cat];
+            const extrasCount = personalBudget.extraItems.filter(
+              (ex) => ex.category === cat
+            ).length;
             return (
               <div key={cat} className="rounded-2xl hoyo-card-inner p-3 space-y-1">
                 <span className="text-[11px] font-semibold text-[#9BA3C2] block">{cat}</span>
@@ -605,6 +674,11 @@ export function CostsTab({
                 {data.pendingCount > 0 && (
                   <span className="text-[10px] text-[#E5B869] block">
                     + {data.pendingCount} a confirmar
+                  </span>
+                )}
+                {extrasCount > 0 && (
+                  <span className="text-[10px] text-[#8AE5DB] block">
+                    + {extrasCount} extra{extrasCount > 1 ? 's' : ''}
                   </span>
                 )}
               </div>
@@ -619,8 +693,8 @@ export function CostsTab({
               {formatBRL(financialSummary.shoppingExtrasTotal)}
             </strong>
             <span className="text-[10px] text-[#9BA3C2] block">
-              {personalBudget.extraItems.length}{' '}
-              {personalBudget.extraItems.length === 1 ? 'item seu' : 'itens seus'}
+              {shoppingExtras.length}{' '}
+              {shoppingExtras.length === 1 ? 'item seu' : 'itens seus'}
             </span>
           </div>
         </div>
@@ -643,90 +717,6 @@ export function CostsTab({
           )}
         </div>
       </div>
-
-      {/* Meus Custos Extras (Privados no Aparelho) */}
-      {personalBudget.extraItems.length > 0 && (
-        <div className="rounded-3xl hoyo-card border-[#E5B869]/30 p-5 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4 text-[#E5B869]" />
-              Meus Custos Extras
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full hoyo-accent-pill border">
-                Só pra você
-              </span>
-            </h3>
-            <span className="text-xs font-bold text-[#F6D794] shrink-0">
-              {formatBRL(financialSummary.allExtrasTotal)}
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {personalBudget.extraItems.map((extra) => (
-              <div
-                key={extra.id}
-                className={`flex items-start justify-between gap-3 rounded-2xl hoyo-card-inner p-3.5 transition ${
-                  !extra.included ? 'opacity-55' : ''
-                }`}
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <input
-                    type="checkbox"
-                    checked={extra.included}
-                    onChange={() => toggleExtraIncluded(extra.id)}
-                    aria-label={`Incluir ${extra.name}`}
-                    className="mt-1 rounded w-4 h-4 shrink-0 cursor-pointer"
-                  />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs sm:text-sm font-bold text-white">
-                        {extra.name}
-                      </span>
-                      <span className="text-[10px] font-semibold bg-[#212847] text-[#CBD2EC] px-2 py-0.5 rounded">
-                        {extra.category}
-                      </span>
-                    </div>
-                    {extra.notes && (
-                      <span className="text-[11px] text-[#9BA3C2] mt-0.5 block">
-                        {extra.notes}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {extra.included && (
-                    <button
-                      type="button"
-                      onClick={() => toggleExtraPaid(extra.id)}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
-                        extra.paid
-                          ? 'bg-[#47C5B8]/20 border-[#47C5B8]/45 text-[#8AE5DB]'
-                          : 'bg-[#171C33] border-[#8596D6]/20 text-[#9BA3C2] hover:text-white'
-                      }`}
-                    >
-                      {extra.paid ? '✓ Pago' : 'Pagar?'}
-                    </button>
-                  )}
-
-                  <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-[#1F2644] text-white">
-                    {formatBRL(extra.amount)}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => removeExtra(extra.id)}
-                    aria-label={`Remover ${extra.name}`}
-                    title="Remover custo extra"
-                    className="p-1.5 rounded-lg text-[#9BA3C2] hover:text-[#FFB5B5] hover:bg-[#EC6B6B]/15 transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Transporte & Deslocamentos (Uber + itens extras da base Transporte) */}
       <div className="rounded-3xl hoyo-card p-5 space-y-3">
@@ -878,12 +868,24 @@ export function CostsTab({
             <div className="space-y-2">{transportBudgetItems.map(renderBudgetItemRow)}</div>
           </div>
         )}
+
+        {transportExtras.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-[#8596D6]/15 space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#E5B869]">
+              Meus extras de Transporte
+            </p>
+            <div className="space-y-2">{transportExtras.map(renderExtraItemRow)}</div>
+          </div>
+        )}
       </div>
 
-      {/* Itens por Categoria (Base Oficial + Sobrescritas Pessoais) */}
+      {/* Itens por Categoria (Base Oficial + Sobrescritas Pessoais + Extras da Categoria) */}
       {(['Ingressos', 'Passeios', 'Alimentação', 'Hospedagem'] as BudgetCategory[]).map(
         (category) => {
           const itemsInCat = budgetItems.filter((i) => i.category === category);
+          const extrasInCat = personalBudget.extraItems.filter(
+            (ex) => ex.category === category
+          );
           return (
             <div key={category} className="rounded-3xl hoyo-card p-5 space-y-3">
               <div className="flex items-center justify-between">
@@ -1012,10 +1014,43 @@ export function CostsTab({
               )}
 
               <div className="space-y-2">{itemsInCat.map(renderBudgetItemRow)}</div>
+
+              {extrasInCat.length > 0 && (
+                <div className="pt-3 mt-3 border-t border-[#8596D6]/15 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#E5B869]">
+                    Meus extras em {category}
+                  </p>
+                  <div className="space-y-2">{extrasInCat.map(renderExtraItemRow)}</div>
+                </div>
+              )}
             </div>
           );
         }
       )}
+
+      {/* Seção dedicada: Compras & Extras */}
+      <div className="rounded-3xl hoyo-card border-[#E5B869]/30 p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <ShoppingBag className="w-4 h-4 text-[#E5B869]" />
+            Compras &amp; Extras
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full hoyo-accent-pill border">
+              Só pra você
+            </span>
+          </h3>
+          <span className="text-xs font-bold text-[#F6D794] shrink-0">
+            Subtotal: {formatBRL(financialSummary.shoppingExtrasTotal)}
+          </span>
+        </div>
+
+        {shoppingExtras.length > 0 ? (
+          <div className="space-y-2">{shoppingExtras.map(renderExtraItemRow)}</div>
+        ) : (
+          <p className="text-xs text-[#9BA3C2]">
+            Nenhum item em Compras &amp; Extras ainda. Clique em &ldquo;+ Custo extra&rdquo; no topo para adicionar lembrancinhas, compras na CCXP, etc.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
