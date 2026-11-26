@@ -61,27 +61,20 @@ export function StopInvitesModal({
       )
     : [];
 
-  const respondedReceived = activeMemberId
-    ? receivedInvites.filter((inv) => {
-        const st = inv.responses[activeMemberId] ?? 'pending';
-        return st === 'accepted' || st === 'declined';
-      })
-    : [];
+  const pendingSent = sentInvites.filter((inv) =>
+    inv.invitedMemberIds.some((id) => (inv.responses[id] ?? 'pending') === 'pending')
+  );
 
   const [activeView, setActiveView] = useState<'received' | 'sent'>('received');
 
   useEffect(() => {
     if (!open) return;
-    if (
-      pendingReceived.length > 0 ||
-      receivedInvites.length > 0 ||
-      sentInvites.length === 0
-    ) {
+    if (pendingReceived.length > 0 || pendingSent.length === 0) {
       setActiveView('received');
     } else {
       setActiveView('sent');
     }
-  }, [open, pendingReceived.length, receivedInvites.length, sentInvites.length]);
+  }, [open, pendingReceived.length, pendingSent.length]);
 
   const formatDayShort = (date: string) => {
     const found = days.find((d) => d.date === date);
@@ -134,7 +127,7 @@ export function StopInvitesModal({
               <span>Convites de Roteiro</span>
             </h3>
             <p className="text-xs text-[#9BA3C2]">
-              Veja convites recebidos dos seus amigos e acompanhe os que você enviou.
+              Apenas convites com ações pendentes aparecem aqui. Quando respondidos, os rolês aceitos já ficam definidos direto no Roteiro.
             </p>
           </div>
           <button
@@ -159,7 +152,7 @@ export function StopInvitesModal({
             }`}
           >
             <Inbox className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Roteiros recebidos ({receivedInvites.length})</span>
+            <span className="truncate">Roteiros recebidos ({pendingReceived.length})</span>
             {pendingReceived.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-[#EC6B6B] text-white text-[10px] font-black leading-none">
                 {pendingReceived.length}
@@ -177,29 +170,22 @@ export function StopInvitesModal({
             }`}
           >
             <Send className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Roteiros enviados ({sentInvites.length})</span>
+            <span className="truncate">Roteiros enviados ({pendingSent.length})</span>
           </button>
         </div>
 
         {activeView === 'received' ? (
-          <div className="space-y-4">
-            {receivedInvites.length === 0 ? (
+          <div className="space-y-3">
+            {pendingReceived.length === 0 ? (
               <div className="rounded-2xl hoyo-card-inner p-5 text-xs text-[#9BA3C2] text-center space-y-1.5">
                 <CalendarCheck2 className="w-7 h-7 text-[#8CA0FF] mx-auto opacity-80" />
-                <p>Você ainda não recebeu nenhum convite de parada.</p>
+                <p>Tudo em dia! Nenhum convite pendente para você responder.</p>
                 <p className="text-[11px] opacity-80">
-                  Quando alguém do grupo te chamar para um rolê, ele aparece aqui!
+                  Os rolês que você aceitou ficam salvos direto na aba Roteiro (e os recusados somem automaticamente).
                 </p>
               </div>
             ) : (
-              <>
-                {pendingReceived.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#E5B869]">
-                      Pendentes ({pendingReceived.length})
-                    </p>
-
-                    {pendingReceived.map((invite) => {
+              pendingReceived.map((invite) => {
                       const linkedAttr = invite.stop.attractionId
                         ? attractions.find((a) => a.id === invite.stop.attractionId)
                         : undefined;
@@ -358,93 +344,23 @@ export function StopInvitesModal({
                               Ver dia
                             </button>
                           </div>
-                        </div>
-                      );
-                    })}
                   </div>
-                )}
-
-                {respondedReceived.length > 0 && (
-                  <div className="space-y-2.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#9BA3C2]">
-                      Já respondidos ({respondedReceived.length})
-                    </p>
-                    {respondedReceived.map((invite) => {
-                      const myStatus = activeMemberId
-                        ? invite.responses[activeMemberId]
-                        : undefined;
-                      const accepted = myStatus === 'accepted';
-                      return (
-                        <div
-                          key={invite.id}
-                          className="rounded-2xl hoyo-card-inner px-3.5 py-3 space-y-2"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-white truncate">
-                                {formatDayShort(invite.stop.dayDate)} •{' '}
-                                {invite.stop.timeLabel} — {invite.stop.title}
-                              </p>
-                              <p className="text-[11px] text-[#9BA3C2]">
-                                Convite de {invite.createdByName} •{' '}
-                                <span
-                                  className={
-                                    accepted ? 'text-[#8AE5DB] font-bold' : 'text-[#FFB4B4] font-bold'
-                                  }
-                                >
-                                  {accepted ? '✓ Aceito' : '✕ Recusado'}
-                                </span>
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onJumpToDay(invite.stop.dayDate);
-                                  onClose();
-                                }}
-                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#212847] text-[#CAD4FF] hover:text-white"
-                              >
-                                Ver dia
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  onRespondInvite(
-                                    invite.id,
-                                    accepted ? 'declined' : 'accepted'
-                                  )
-                                }
-                                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition ${
-                                  accepted
-                                    ? 'bg-[#EC6B6B]/15 border-[#EC6B6B]/30 text-[#FFD0D0] hover:bg-[#EC6B6B]/25'
-                                    : 'bg-[#47C5B8]/15 border-[#47C5B8]/35 text-[#8AE5DB] hover:bg-[#47C5B8]/25'
-                                }`}
-                              >
-                                {accepted ? 'Recusar / Sair' : 'Aceitar'}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
+                );
+              })
             )}
           </div>
         ) : (
           <div className="space-y-2.5">
-            {sentInvites.length === 0 ? (
+            {pendingSent.length === 0 ? (
               <div className="rounded-2xl hoyo-card-inner p-5 text-xs text-[#9BA3C2] text-center space-y-1.5">
                 <Send className="w-7 h-7 text-[#8CA0FF] mx-auto opacity-80" />
-                <p>Você ainda não enviou nenhum convite de parada.</p>
+                <p>Nenhum convite aguardando resposta no momento.</p>
                 <p className="text-[11px] opacity-80">
-                  Clique em &ldquo;Adicionar ao meu dia&rdquo; na aba Roteiro e marque os amigos que quer chamar!
+                  Assim que todos os convidados respondem, o rolê sai desta caixa e fica definido no Roteiro de quem aceitou.
                 </p>
               </div>
             ) : (
-              sentInvites.map((invite) => {
+              pendingSent.map((invite) => {
                 const linkedAttr = invite.stop.attractionId
                   ? attractions.find((a) => a.id === invite.stop.attractionId)
                   : undefined;

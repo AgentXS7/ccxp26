@@ -1000,17 +1000,14 @@ export default function App() {
     [days, selectedDate]
   );
 
-  const receivedInvitesForMe = useMemo(() => {
-    if (!activeMemberId) return [];
-    return stopInvites.filter((inv) => inv.invitedMemberIds.includes(activeMemberId));
-  }, [stopInvites, activeMemberId]);
-
   const pendingInvitesForMe = useMemo(() => {
     if (!activeMemberId) return [];
-    return receivedInvitesForMe.filter(
-      (inv) => (inv.responses[activeMemberId] ?? 'pending') === 'pending'
+    return stopInvites.filter(
+      (inv) =>
+        inv.invitedMemberIds.includes(activeMemberId) &&
+        (inv.responses[activeMemberId] ?? 'pending') === 'pending'
     );
-  }, [receivedInvitesForMe, activeMemberId]);
+  }, [stopInvites, activeMemberId]);
 
   const handleOpenInvites = () => {
     if (!activeMemberId) {
@@ -1021,9 +1018,15 @@ export default function App() {
     setInvitesModalOpen(true);
   };
 
-  const sentInvitesByMe = useMemo(() => {
+  const pendingSentInvitesByMe = useMemo(() => {
     if (!activeMemberId) return [];
-    return stopInvites.filter((inv) => inv.createdById === activeMemberId);
+    return stopInvites.filter(
+      (inv) =>
+        inv.createdById === activeMemberId &&
+        inv.invitedMemberIds.some(
+          (id) => (inv.responses[id] ?? 'pending') === 'pending'
+        )
+    );
   }, [stopInvites, activeMemberId]);
 
   const myActiveSharedStops = useMemo(() => {
@@ -1795,8 +1798,8 @@ export default function App() {
         days={days}
         attractions={attractions}
         activeMemberId={activeMemberId}
-        receivedInvites={receivedInvitesForMe}
-        sentInvites={sentInvitesByMe}
+        receivedInvites={pendingInvitesForMe}
+        sentInvites={pendingSentInvitesByMe}
         allActiveStops={allActiveStops}
         userProfiles={userProfiles}
         onRespondInvite={handleRespondStopInvite}
