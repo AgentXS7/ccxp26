@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   ATTRACTIONS: 'sp2026_attractions_v1',
   STOPS: 'sp2026_stops_v1',
   PERSONAL_ITINERARY: 'sp2026_personal_itinerary_v1',
+  STOP_INVITES: 'sp2026_stop_invites_v1',
   BUDGET: 'sp2026_budget_v1',
   PERSONAL_BUDGET: 'sp2026_personal_budget_v1',
   TRANSPORT: 'sp2026_transport_v1',

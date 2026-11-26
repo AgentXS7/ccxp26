@@ -40,6 +40,7 @@ import { AddPlaceModal } from './components/modals/AddPlaceModal';
 import { AttractionDrawer } from './components/modals/AttractionDrawer';
 import { InstallModal } from './components/modals/InstallModal';
 import { ShareModal } from './components/modals/ShareModal';
+import { StopInvitesModal } from './components/modals/StopInvitesModal';
 import { ThemePersonalizeModal } from './components/modals/ThemePersonalizeModal';
 import { VoterNameModal } from './components/modals/VoterNameModal';
 
@@ -63,6 +64,7 @@ import type {
   PersonalItineraryState,
   PlaceLikeEntry,
   RsvpEntry,
+  SharedStopInvite,
   ShiftType,
   StopVoteEntry,
   TabKey,
@@ -194,6 +196,11 @@ export default function App() {
     STORAGE_KEYS.PERSONAL_ITINERARY,
     { hiddenStopIds: [], addedStops: [] }
   );
+  const [stopInvites, setStopInvites] = usePersistedState<SharedStopInvite[]>(
+    STORAGE_KEYS.STOP_INVITES,
+    []
+  );
+  const [invitesModalOpen, setInvitesModalOpen] = useState(false);
 
   const deviceToken = useMemo(() => getOrCreateDeviceToken(), []);
 
@@ -274,6 +281,8 @@ export default function App() {
     enqueueOfflineOp,
     upsertMemberProfile,
     unlockMemberDevicesAsAdmin,
+    upsertStopInvite,
+    deleteStopInvite,
     deletePlaceAsAdmin,
   } = useSupabaseSync({
     config,
@@ -295,6 +304,7 @@ export default function App() {
     setUserProfiles,
     memberProfiles,
     setMemberProfiles,
+    setStopInvites,
     offlineQueue,
     setOfflineQueue,
     removedPlaceIds,
@@ -990,11 +1000,37 @@ export default function App() {
     [days, selectedDate]
   );
 
+  const pendingInvitesForMe = useMemo(() => {
+    if (!activeMemberId) return [];
+    return stopInvites.filter(
+      (inv) =>
+        inv.invitedMemberIds.includes(activeMemberId) &&
+        (inv.responses[activeMemberId] ?? 'pending') === 'pending'
+    );
+  }, [stopInvites, activeMemberId]);
+
+  const sentInvitesByMe = useMemo(() => {
+    if (!activeMemberId) return [];
+    return stopInvites.filter((inv) => inv.createdById === activeMemberId);
+  }, [stopInvites, activeMemberId]);
+
+  const myActiveSharedStops = useMemo(() => {
+    if (!activeMemberId) return [];
+    return stopInvites
+      .filter(
+        (inv) =>
+          inv.createdById === activeMemberId ||
+          inv.responses[activeMemberId] === 'accepted'
+      )
+      .map((inv) => inv.stop);
+  }, [stopInvites, activeMemberId]);
+
   const allActiveStops = useMemo(() => {
     const hiddenSet = new Set(personalItinerary.hiddenStopIds);
     const official = stops.filter((s) => !hiddenSet.has(s.id));
-    return [...official, ...personalItinerary.addedStops];
-  }, [stops, personalItinerary]);
+    const shared = myActiveSharedStops.filter((s) => !hiddenSet.has(s.id));
+    return [...official, ...shared, ...personalItinerary.addedStops];
+  }, [stops, myActiveSharedStops, personalItinerary]);
 
   const allDayStops = useMemo(() => {
     return allActiveStops
@@ -1009,18 +1045,55 @@ export default function App() {
 
   const hiddenOfficialStops = useMemo(() => {
     const hiddenSet = new Set(personalItinerary.hiddenStopIds);
-    return stops
+    return [...stops, ...myActiveSharedStops]
       .filter((s) => s.dayDate === currentDay.date && hiddenSet.has(s.id))
       .sort(compareStopsChronologically);
-  }, [stops, personalItinerary.hiddenStopIds, currentDay.date]);
+  }, [stops, myActiveSharedStops, personalItinerary.hiddenStopIds, currentDay.date]);
 
   const [personalStopModal, setPersonalStopModal] = useState<{
     open: boolean;
     attractionId: string | null;
   }>({ open: false, attractionId: null });
 
-  const handleAddPersonalStop = (newStop: ItineraryStop) => {
+  const handleAddPersonalStop = (
+    newStop: ItineraryStop,
+    invitedMemberIds: GroupMemberId[] = []
+  ) => {
     if (!requireTrustedMember('adicionar ao roteiro')) return;
+
+    if (invitedMemberIds.length > 0 && activeMemberId) {
+      const inviteId = 'inv_' + Date.now().toString(36);
+      const now = new Date().toISOString();
+      const sharedStop: ItineraryStop = {
+        ...newStop,
+        id: 'stop_shared_' + inviteId,
+        isPersonal: false,
+        sharedInviteId: inviteId,
+        sharedByName: effectiveVoterName || getMemberName(activeMemberId),
+      };
+      const invite: SharedStopInvite = {
+        id: inviteId,
+        kind: 'stop_invite',
+        createdById: activeMemberId,
+        createdByName: effectiveVoterName || getMemberName(activeMemberId),
+        createdAt: now,
+        updatedAt: now,
+        stop: sharedStop,
+        invitedMemberIds,
+        responses: {},
+      };
+      upsertStopInvite(invite);
+      setSelectedDate(sharedStop.dayDate);
+      setActiveTab('roteiro');
+      const invitedNames = invitedMemberIds
+        .map((id) => getMemberName(id))
+        .join(', ');
+      showToast(
+        `"${sharedStop.title}" adicionado e convite enviado para ${invitedNames}!`
+      );
+      return;
+    }
+
     setPersonalItinerary((prev) => ({
       ...prev,
       addedStops: [...prev.addedStops, newStop],
@@ -1028,6 +1101,56 @@ export default function App() {
     setSelectedDate(newStop.dayDate);
     setActiveTab('roteiro');
     showToast(`"${newStop.title}" adicionado ao seu roteiro!`);
+  };
+
+  const handleRespondStopInvite = (
+    inviteId: string,
+    response: 'accepted' | 'declined'
+  ) => {
+    if (!requireTrustedMember('responder convites') || !activeMemberId) return;
+    const target = stopInvites.find((i) => i.id === inviteId);
+    if (!target) return;
+
+    const updated: SharedStopInvite = {
+      ...target,
+      responses: {
+        ...target.responses,
+        [activeMemberId]: response,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    upsertStopInvite(updated);
+
+    if (response === 'accepted') {
+      setSelectedDate(target.stop.dayDate);
+      setActiveTab('roteiro');
+      showToast(`"${target.stop.title}" adicionado ao seu roteiro!`);
+    } else {
+      showToast(`Convite "${target.stop.title}" recusado.`, 'info');
+    }
+  };
+
+  const handleCancelOrLeaveSharedStop = (inviteId: string) => {
+    if (!requireTrustedMember('atualizar rolê compartilhado') || !activeMemberId) return;
+    const target = stopInvites.find((i) => i.id === inviteId);
+    if (!target) return;
+
+    if (target.createdById === activeMemberId) {
+      deleteStopInvite(inviteId);
+      showToast(`Convite "${target.stop.title}" cancelado para todos.`, 'info');
+      return;
+    }
+
+    const updated: SharedStopInvite = {
+      ...target,
+      responses: {
+        ...target.responses,
+        [activeMemberId]: 'declined',
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    upsertStopInvite(updated);
+    showToast(`Você saiu de "${target.stop.title}".`, 'info');
   };
 
   const handleHideOfficialStop = (stopId: string) => {
@@ -1060,7 +1183,9 @@ export default function App() {
   const handleRestoreOfficialStops = () => {
     if (!requireTrustedMember('restaurar paradas')) return;
     const idsOfDay = new Set(
-      stops.filter((s) => s.dayDate === currentDay.date).map((s) => s.id)
+      [...stops, ...myActiveSharedStops]
+        .filter((s) => s.dayDate === currentDay.date)
+        .map((s) => s.id)
     );
     setPersonalItinerary((prev) => ({
       ...prev,
@@ -1362,6 +1487,9 @@ export default function App() {
         <MascotCorner
           activeTab={activeTab}
           voterName={effectiveVoterName}
+          pendingInvites={pendingInvitesForMe}
+          days={days}
+          onOpenInvites={() => setInvitesModalOpen(true)}
           onHide={() => {
             setUserPrefs((p) => ({ ...p, showMascot: false }));
             showToast('Mascote escondido. Dá pra trazer de volta no 🎨 Tema!', 'info');
@@ -1462,6 +1590,9 @@ export default function App() {
             compactCards={userPrefs.compactCards}
             canEdit={canEdit}
             hiddenOfficialStops={hiddenOfficialStops}
+            stopInvites={stopInvites}
+            pendingInvitesCount={pendingInvitesForMe.length}
+            activeMemberId={activeMemberId}
             onOpenVoterModal={openVoterModal}
             onVoteClick={handleVoteClick}
             onSelectAttraction={setSelectedAttraction}
@@ -1469,6 +1600,8 @@ export default function App() {
               if (!requireTrustedMember('adicionar ao roteiro')) return;
               setPersonalStopModal({ open: true, attractionId: null });
             }}
+            onOpenInvites={() => setInvitesModalOpen(true)}
+            onCancelOrLeaveSharedStop={handleCancelOrLeaveSharedStop}
             onHideOfficialStop={handleHideOfficialStop}
             onRemovePersonalStop={handleRemovePersonalStop}
             onRestoreSingleOfficialStop={handleRestoreSingleOfficialStop}
@@ -1625,6 +1758,9 @@ export default function App() {
         defaultDate={currentDay.date}
         attractions={attractions}
         allActiveStops={allActiveStops}
+        activeMemberId={activeMemberId}
+        memberProfiles={memberProfiles}
+        userProfiles={userProfiles}
         preselectedAttractionId={personalStopModal.attractionId}
         onAddStop={handleAddPersonalStop}
         onOpenNewPlaceModal={(targetDate, targetShift) => {
@@ -1636,6 +1772,24 @@ export default function App() {
             targetShift,
           }));
           setAddPlaceModalOpen(true);
+        }}
+      />
+
+      <StopInvitesModal
+        open={invitesModalOpen}
+        onClose={() => setInvitesModalOpen(false)}
+        days={days}
+        attractions={attractions}
+        activeMemberId={activeMemberId}
+        pendingInvites={pendingInvitesForMe}
+        sentInvites={sentInvitesByMe}
+        allActiveStops={allActiveStops}
+        userProfiles={userProfiles}
+        onRespondInvite={handleRespondStopInvite}
+        onCancelInvite={handleCancelOrLeaveSharedStop}
+        onJumpToDay={(date) => {
+          setSelectedDate(date);
+          setActiveTab('roteiro');
         }}
       />
 

@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
+  BellRing,
   ChevronRight,
   Clock,
   Eye,
@@ -14,14 +15,18 @@ import {
   Star,
   Train,
   Trash2,
+  Users,
 } from 'lucide-react';
+import { GROUP_MEMBERS } from '../../data/members';
 import { findTimeConflicts } from '../../lib/scheduleUtils';
 import { handleImgError } from '../../lib/utils';
 import type {
   AttractionMeta,
   DayBadgeType,
+  GroupMemberId,
   ItineraryDay,
   ItineraryStop,
+  SharedStopInvite,
   ShiftType,
   StopVoteEntry,
   TripConfig,
@@ -53,10 +58,15 @@ interface ItineraryTabProps {
   compactCards: boolean;
   canEdit: boolean;
   hiddenOfficialStops: ItineraryStop[];
+  stopInvites: SharedStopInvite[];
+  pendingInvitesCount: number;
+  activeMemberId: GroupMemberId | null;
   onOpenVoterModal: () => void;
   onVoteClick: (e: React.MouseEvent, stopId: string, choice: 'yes' | 'no') => void;
   onSelectAttraction: (attr: AttractionMeta) => void;
   onOpenAddPersonalStop: () => void;
+  onOpenInvites: () => void;
+  onCancelOrLeaveSharedStop: (inviteId: string) => void;
   onHideOfficialStop: (stopId: string) => void;
   onRemovePersonalStop: (stopId: string) => void;
   onRestoreSingleOfficialStop: (stopId: string) => void;
@@ -93,10 +103,15 @@ export function ItineraryTab({
   compactCards,
   canEdit,
   hiddenOfficialStops,
+  stopInvites,
+  pendingInvitesCount,
+  activeMemberId,
   onOpenVoterModal,
   onVoteClick,
   onSelectAttraction,
   onOpenAddPersonalStop,
+  onOpenInvites,
+  onCancelOrLeaveSharedStop,
   onHideOfficialStop,
   onRemovePersonalStop,
   onRestoreSingleOfficialStop,
@@ -165,6 +180,30 @@ export function ItineraryTab({
           {voterName.trim() ? 'Editar perfil' : 'Definir perfil'}
         </button>
       </div>
+
+      {/* Aviso de Convites Pendentes */}
+      {pendingInvitesCount > 0 && (
+        <div className="rounded-2xl bg-[#47C5B8]/14 border border-[#47C5B8]/45 px-4 py-3 flex flex-wrap items-center justify-between gap-2.5 animate-fade-in">
+          <div className="flex items-center gap-2.5 min-w-0 text-xs text-[#E8FFFC]">
+            <BellRing className="w-4 h-4 text-[#8AE5DB] shrink-0 animate-pulse" />
+            <span>
+              Você tem{' '}
+              <strong className="text-white">
+                {pendingInvitesCount}{' '}
+                {pendingInvitesCount === 1 ? 'convite de parada' : 'convites de paradas'}
+              </strong>{' '}
+              pendente{pendingInvitesCount > 1 ? 's' : ''} dos seus amigos!
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenInvites}
+            className="text-xs font-extrabold hoyo-accent-btn px-3.5 py-1.5 rounded-xl shrink-0"
+          >
+            Ver e responder →
+          </button>
+        </div>
+      )}
 
       {/* Seletor Horizontal de Dias */}
       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -391,13 +430,18 @@ export function ItineraryTab({
               ? votesForStop.find((v) => v.voterName.trim().toLowerCase() === normalizedMe)
               : undefined;
 
-            const cardConflicts = stop.isPersonal
-              ? findTimeConflicts(
-                  stop.timeLabel,
-                  stop.shift,
-                  allDayStops.filter((other) => other.id !== stop.id)
-                )
-              : [];
+            const sharedInvite = stop.sharedInviteId
+              ? stopInvites.find((i) => i.id === stop.sharedInviteId)
+              : undefined;
+
+            const cardConflicts =
+              stop.isPersonal || Boolean(sharedInvite)
+                ? findTimeConflicts(
+                    stop.timeLabel,
+                    stop.shift,
+                    allDayStops.filter((other) => other.id !== stop.id)
+                  )
+                : [];
 
             return (
               <div key={stop.id} className="space-y-2">
@@ -408,6 +452,8 @@ export function ItineraryTab({
                   } ${
                     cardConflicts.length > 0
                       ? 'border-[#EC6B6B]/55'
+                      : sharedInvite
+                      ? 'border-[#47C5B8]/45'
                       : stop.isPersonal
                       ? 'border-[#657EF8]/45'
                       : stop.isMandatory
@@ -442,10 +488,19 @@ export function ItineraryTab({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {stop.isPersonal && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full hoyo-accent-pill border">
-                              Meu roteiro
+                          {sharedInvite ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#47C5B8]/18 text-[#8AE5DB] border border-[#47C5B8]/40">
+                              <Users className="w-2.5 h-2.5" />
+                              {sharedInvite.createdById === activeMemberId
+                                ? 'Rolê compartilhado'
+                                : `Convite de ${sharedInvite.createdByName}`}
                             </span>
+                          ) : (
+                            stop.isPersonal && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full hoyo-accent-pill border">
+                                Meu roteiro
+                              </span>
+                            )
                           )}
                           {cardConflicts.length > 0 && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EC6B6B]/18 text-[#FFB4B4] border border-[#EC6B6B]/45">
@@ -456,6 +511,7 @@ export function ItineraryTab({
                             .filter(
                               (t) =>
                                 t !== 'Meu roteiro' &&
+                                t !== 'Rolê compartilhado' &&
                                 !t.toLowerCase().includes('obrigat')
                             )
                             .map((tag) => (
@@ -556,8 +612,84 @@ export function ItineraryTab({
                         </div>
                       )}
 
-                      {/* Enquete do Grupo (somente nas paradas oficiais) */}
-                      {!stop.isPersonal && (
+                      {/* Participantes (rolê compartilhado) ou Enquete do Grupo (paradas oficiais) */}
+                      {sharedInvite ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-3.5 rounded-2xl hoyo-card-inner p-3 space-y-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                            <span className="font-semibold text-[#CBD2EC] flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-[#8AE5DB]" />
+                              Quem vai nesse rolê:
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const isCreator =
+                                    sharedInvite.createdById === activeMemberId;
+                                  const msg = isCreator
+                                    ? `Cancelar e remover "${stop.title}" para todos os convidados?`
+                                    : `Sair do rolê "${stop.title}"?`;
+                                  if (window.confirm(msg)) {
+                                    onCancelOrLeaveSharedStop(sharedInvite.id);
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-[#F49797] hover:text-white"
+                              >
+                                {sharedInvite.createdById === activeMemberId
+                                  ? 'Cancelar convite'
+                                  : 'Sair do rolê'}
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#47C5B8]/15 border border-[#47C5B8]/35 text-[#BFF4ED] font-medium">
+                              <UserAvatar
+                                photo={getPhoto(sharedInvite.createdByName)}
+                                name={sharedInvite.createdByName}
+                                sizeClass="w-4 h-4"
+                                textClass="text-[9px]"
+                              />
+                              <span>✓ {sharedInvite.createdByName}</span>
+                            </span>
+                            {sharedInvite.invitedMemberIds.map((mId) => {
+                              const member = GROUP_MEMBERS.find((m) => m.id === mId);
+                              const label = member ? member.name : mId;
+                              const status = sharedInvite.responses[mId] ?? 'pending';
+                              return (
+                                <span
+                                  key={mId}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-medium ${
+                                    status === 'accepted'
+                                      ? 'bg-[#47C5B8]/15 border-[#47C5B8]/35 text-[#BFF4ED]'
+                                      : status === 'declined'
+                                      ? 'bg-[#EC6B6B]/15 border-[#EC6B6B]/30 text-[#FFD0D0]'
+                                      : 'bg-[#171C33] border-[#8596D6]/25 text-[#9BA3C2]'
+                                  }`}
+                                >
+                                  <UserAvatar
+                                    photo={getPhoto(label)}
+                                    name={label}
+                                    sizeClass="w-4 h-4"
+                                    textClass="text-[9px]"
+                                  />
+                                  <span>
+                                    {status === 'accepted'
+                                      ? `✓ ${label}`
+                                      : status === 'declined'
+                                      ? `✕ ${label}`
+                                      : `⏳ ${label}`}
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        !stop.isPersonal && (
                         <div
                           onClick={(e) => e.stopPropagation()}
                           className="mt-3.5 rounded-2xl hoyo-card-inner p-3 space-y-2.5"
@@ -658,6 +790,7 @@ export function ItineraryTab({
                             </div>
                           )}
                         </div>
+                        )
                       )}
 
                       {linkedAttr && (

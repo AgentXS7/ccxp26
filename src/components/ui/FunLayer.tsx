@@ -1,7 +1,7 @@
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import type { TabKey } from '../../types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BellRing, X } from 'lucide-react';
+import type { ItineraryDay, SharedStopInvite, TabKey } from '../../types';
 import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from './AnimeDecor';
 import {
   BobaSticker,
@@ -158,22 +158,54 @@ const TIPS: Record<TabKey, React.ReactNode[]> = {
 interface MascotCornerProps {
   activeTab: TabKey;
   voterName: string;
+  pendingInvites: SharedStopInvite[];
+  days: ItineraryDay[];
+  onOpenInvites: () => void;
   onHide: () => void;
 }
 
-export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps) {
+export function MascotCorner({
+  activeTab,
+  voterName,
+  pendingInvites,
+  days,
+  onOpenInvites,
+  onHide,
+}: MascotCornerProps) {
   const mascotId = TAB_MASCOT[activeTab];
   const mascot = MASCOTS[mascotId];
   const tips = TIPS[activeTab];
 
   const [open, setOpen] = useState(false);
   const [tipIndex, setTipIndex] = useState(0);
+  const [showTipsInsteadOfInvite, setShowTipsInsteadOfInvite] = useState(false);
   const [imgFailed, setImgFailed] = useState<Record<string, boolean>>({});
+  const lastAnnouncedKeyRef = useRef<string>('');
+
+  const inviteKey = useMemo(
+    () => pendingInvites.map((i) => i.id).sort().join(','),
+    [pendingInvites]
+  );
+
+  // Anuncia imediatamente sempre que chegar um novo convite pendente
+  useEffect(() => {
+    if (!inviteKey) {
+      lastAnnouncedKeyRef.current = '';
+      setShowTipsInsteadOfInvite(false);
+      return;
+    }
+    if (inviteKey !== lastAnnouncedKeyRef.current) {
+      lastAnnouncedKeyRef.current = inviteKey;
+      setShowTipsInsteadOfInvite(false);
+      setOpen(true);
+    }
+  }, [inviteKey]);
 
   // Ao trocar de aba, mostra um balãozinho rápido com a nova dica
   useEffect(() => {
     setTipIndex(0);
     setOpen(true);
+    if (pendingInvites.length > 0 && !showTipsInsteadOfInvite) return;
     const t = setTimeout(() => setOpen(false), 5200);
     return () => clearTimeout(t);
   }, [activeTab]);
@@ -182,6 +214,13 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
     () => (voterName.trim() ? `Ei, ${voterName.trim()}!` : 'Ei, viajante!'),
     [voterName]
   );
+
+  const showingInviteAlert = pendingInvites.length > 0 && !showTipsInsteadOfInvite;
+
+  const formatDayShort = (date: string) => {
+    const found = days.find((d) => d.date === date);
+    return found ? `${found.shortLabel} (${found.weekday})` : date;
+  };
 
   const Fallback = mascot.Fallback;
 
@@ -192,7 +231,9 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
       {open && (
         <div
           role="status"
-          className="pointer-events-auto relative max-w-[230px] sm:max-w-[260px] rounded-2xl rounded-br-md hoyo-card border-[#E5B869]/45 px-3.5 py-3 shadow-2xl animate-fade-in mb-6"
+          className={`pointer-events-auto relative max-w-[250px] sm:max-w-[290px] rounded-2xl rounded-br-md hoyo-card px-3.5 py-3 shadow-2xl animate-fade-in mb-6 ${
+            showingInviteAlert ? 'border-[#47C5B8]/65' : 'border-[#E5B869]/45'
+          }`}
         >
           <button
             type="button"
@@ -202,35 +243,93 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
           >
             <X className="w-3.5 h-3.5" />
           </button>
-          <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#E5B869] pr-4">
-            {mascot.name} • {mascot.role}
-          </p>
-          <p className="text-xs text-[#EEF1FA] mt-1 leading-relaxed">
-            <strong className="text-[#8AE5DB]">{greeting}</strong> {tips[tipIndex % tips.length]}
-          </p>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setTipIndex((i) => i + 1)}
-              className="text-[11px] font-bold text-[#8CA0FF] hover:text-white"
-            >
-              Outra dica →
-            </button>
-            <button
-              type="button"
-              onClick={onHide}
-              className="text-[10px] text-[#8F97B8] hover:text-[#FFB5B5]"
-            >
-              Esconder mascote
-            </button>
-          </div>
+
+          {showingInviteAlert ? (
+            <>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#8AE5DB] pr-4 flex items-center gap-1">
+                <BellRing className="w-3 h-3" />
+                {mascot.name} • Convite do Grupo
+              </p>
+              {pendingInvites.length === 1 ? (
+                <p className="text-xs text-[#EEF1FA] mt-1 leading-relaxed">
+                  <strong className="text-[#8AE5DB]">{greeting}</strong>{' '}
+                  <strong className="text-white">{pendingInvites[0].createdByName}</strong> te
+                  convidou para{' '}
+                  <strong className="text-[#F6D794]">
+                    “{pendingInvites[0].stop.title}”
+                  </strong>{' '}
+                  ({formatDayShort(pendingInvites[0].stop.dayDate)} •{' '}
+                  {pendingInvites[0].stop.timeLabel}). Dá uma olhada!
+                </p>
+              ) : (
+                <p className="text-xs text-[#EEF1FA] mt-1 leading-relaxed">
+                  <strong className="text-[#8AE5DB]">{greeting}</strong> Você tem{' '}
+                  <strong className="text-[#F6D794]">
+                    {pendingInvites.length} convites
+                  </strong>{' '}
+                  pendentes (
+                  {pendingInvites
+                    .slice(0, 3)
+                    .map((i) => i.stop.title)
+                    .join(', ')}
+                  {pendingInvites.length > 3 ? '...' : ''}). Dá uma olhada!
+                </p>
+              )}
+              <div className="mt-2.5 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={onOpenInvites}
+                  className="text-[11px] font-extrabold hoyo-accent-btn px-2.5 py-1 rounded-lg"
+                >
+                  Ver convite{pendingInvites.length > 1 ? 's' : ''} →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTipsInsteadOfInvite(true)}
+                  className="text-[10px] text-[#9BA3C2] hover:text-white"
+                >
+                  Ver dicas
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#E5B869] pr-4">
+                {mascot.name} • {mascot.role}
+              </p>
+              <p className="text-xs text-[#EEF1FA] mt-1 leading-relaxed">
+                <strong className="text-[#8AE5DB]">{greeting}</strong>{' '}
+                {tips[tipIndex % tips.length]}
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTipIndex((i) => i + 1)}
+                  className="text-[11px] font-bold text-[#8CA0FF] hover:text-white"
+                >
+                  Outra dica →
+                </button>
+                <button
+                  type="button"
+                  onClick={onHide}
+                  className="text-[10px] text-[#8F97B8] hover:text-[#FFB5B5]"
+                >
+                  Esconder mascote
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       <button
         type="button"
         onClick={() => {
-          if (open) setTipIndex((i) => i + 1);
+          if (pendingInvites.length > 0 && showTipsInsteadOfInvite) {
+            setShowTipsInsteadOfInvite(false);
+          } else if (open && !showingInviteAlert) {
+            setTipIndex((i) => i + 1);
+          }
           setOpen(true);
         }}
         aria-label={`Falar com ${mascot.name}, mascote do app`}
@@ -252,10 +351,16 @@ export function MascotCorner({ activeTab, voterName, onHide }: MascotCornerProps
             </span>
           </span>
         )}
-        {!open && (
-          <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#E5B869] text-[#0C0F1D] text-[11px] font-black flex items-center justify-center border-2 border-[#0C0F1D] animate-twinkle">
-            !
+        {pendingInvites.length > 0 ? (
+          <span className="absolute top-0.5 right-0.5 min-w-[22px] h-[22px] px-1 rounded-full bg-[#EC6B6B] text-white text-[11px] font-black flex items-center justify-center border-2 border-[#0C0F1D] shadow-lg animate-pulse">
+            {pendingInvites.length}
           </span>
+        ) : (
+          !open && (
+            <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#E5B869] text-[#0C0F1D] text-[11px] font-black flex items-center justify-center border-2 border-[#0C0F1D] animate-twinkle">
+              !
+            </span>
+          )
         )}
       </button>
     </div>

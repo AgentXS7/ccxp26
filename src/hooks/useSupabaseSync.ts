@@ -12,6 +12,7 @@ import type {
   MemberCloudProfile,
   OfflineQueueOp,
   PlaceLikeEntry,
+  SharedStopInvite,
   StopVoteEntry,
   TransportLeg,
   TripConfig,
@@ -42,6 +43,7 @@ interface UseSupabaseSyncParams {
     React.SetStateAction<Partial<Record<GroupMemberId, MemberCloudProfile>>>
   >;
   offlineQueue: OfflineQueueOp[];
+  setStopInvites: React.Dispatch<React.SetStateAction<SharedStopInvite[]>>;
   setOfflineQueue: React.Dispatch<React.SetStateAction<OfflineQueueOp[]>>;
   removedPlaceIds: string[];
   setRemovedPlaceIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -74,6 +76,7 @@ export function useSupabaseSync({
   setUserProfiles,
   memberProfiles,
   setMemberProfiles,
+  setStopInvites,
   offlineQueue,
   setOfflineQueue,
   removedPlaceIds,
@@ -223,6 +226,28 @@ export function useSupabaseSync({
           });
           return;
         }
+        case 'invite_upsert': {
+          const inv = op.payload;
+          await cloudFetch('custom_places?on_conflict=id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates' },
+            body: JSON.stringify({
+              id: `sys_invite_${inv.id}`,
+              payload: inv,
+              created_at: inv.createdAt,
+            }),
+          });
+          return;
+        }
+        case 'invite_delete': {
+          await cloudFetch(
+            `custom_places?id=eq.${encodeURIComponent(`sys_invite_${op.payload.id}`)}`,
+            {
+              method: 'DELETE',
+            }
+          );
+          return;
+        }
       }
     },
     [cloudFetch]
@@ -358,6 +383,7 @@ export function useSupabaseSync({
         if (Array.isArray(placesRows)) {
           let nextRemovedIds: string[] = [];
           let cloudTransportLegs: TransportLeg[] | null = null;
+          const cloudInvites: SharedStopInvite[] = [];
           const cloudProfiles: Record<string, string | null> = {};
           const cloudMembers: Partial<Record<GroupMemberId, MemberCloudProfile>> = {};
           const cloudCustom: AttractionMeta[] = [];
@@ -377,6 +403,14 @@ export function useSupabaseSync({
             if (id === 'sys_transport_legs' && payload.kind === 'transport_legs') {
               if (Array.isArray(payload.legs)) {
                 cloudTransportLegs = payload.legs as TransportLeg[];
+              }
+              return;
+            }
+
+            if (id.startsWith('sys_invite_') && payload.kind === 'stop_invite') {
+              const inv = payload as unknown as SharedStopInvite;
+              if (inv && inv.id && inv.stop) {
+                cloudInvites.push(inv);
               }
               return;
             }
@@ -414,6 +448,8 @@ export function useSupabaseSync({
           });
 
           setRemovedPlaceIds(nextRemovedIds);
+          cloudInvites.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+          setStopInvites(cloudInvites);
           if (cloudTransportLegs !== null && !shouldSkipSharedOverwrite()) {
             setTransportLegs(cloudTransportLegs);
             lastSharedSnapshotRef.current = '';
@@ -518,6 +554,7 @@ export function useSupabaseSync({
       setConfig,
       setUserProfiles,
       setMemberProfiles,
+      setStopInvites,
       setRemovedPlaceIds,
     ]
   );
@@ -558,6 +595,72 @@ export function useSupabaseSync({
       }
     },
     [hasSupabase, executeSingleOp, enqueueOfflineOp, setMemberProfiles, setUserProfiles]
+  );
+
+  const upsertStopInvite = useCallback(
+    async (invite: SharedStopInvite) => {
+      setStopInvites((prev) => {
+        const exists = prev.some((i) => i.id === invite.id);
+        return exists
+          ? prev.map((i) => (i.id === invite.id ? invite : i))
+          : [invite, ...prev];
+      });
+
+      if (!hasSupabase) return;
+
+      const queueOp: OfflineQueueOp = {
+        key: `invite:${invite.id}`,
+        type: 'invite_upsert',
+        payload: invite,
+        createdAt: invite.updatedAt,
+      };
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        enqueueOfflineOp(queueOp);
+        setSyncStatus('local');
+        return;
+      }
+
+      try {
+        await executeSingleOp(queueOp);
+        setSyncStatus('synced');
+        setSyncErrorDetail('');
+      } catch {
+        enqueueOfflineOp(queueOp);
+        setSyncStatus('local');
+      }
+    },
+    [hasSupabase, executeSingleOp, enqueueOfflineOp, setStopInvites]
+  );
+
+  const deleteStopInvite = useCallback(
+    async (inviteId: string) => {
+      setStopInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      if (!hasSupabase) return;
+
+      const queueOp: OfflineQueueOp = {
+        key: `invite:${inviteId}`,
+        type: 'invite_delete',
+        payload: { id: inviteId },
+        createdAt: new Date().toISOString(),
+      };
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        enqueueOfflineOp(queueOp);
+        setSyncStatus('local');
+        return;
+      }
+
+      try {
+        await executeSingleOp(queueOp);
+        setSyncStatus('synced');
+        setSyncErrorDetail('');
+      } catch {
+        enqueueOfflineOp(queueOp);
+        setSyncStatus('local');
+      }
+    },
+    [hasSupabase, executeSingleOp, enqueueOfflineOp, setStopInvites]
   );
 
   const unlockMemberDevicesAsAdmin = useCallback(
@@ -857,6 +960,8 @@ export function useSupabaseSync({
     enqueueOfflineOp,
     upsertMemberProfile,
     unlockMemberDevicesAsAdmin,
+    upsertStopInvite,
+    deleteStopInvite,
     syncUserProfileToCloud,
     deletePlaceAsAdmin,
   };

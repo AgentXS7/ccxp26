@@ -71,7 +71,9 @@ export type OfflineQueueOp =
   | { key: string; type: 'like_upsert'; payload: PlaceLikeEntry; createdAt: string }
   | { key: string; type: 'like_delete'; payload: { id: string }; createdAt: string }
   | { key: string; type: 'place_upsert'; payload: AttractionMeta; createdAt: string }
-  | { key: string; type: 'member_upsert'; payload: MemberCloudProfile; createdAt: string };
+  | { key: string; type: 'member_upsert'; payload: MemberCloudProfile; createdAt: string }
+  | { key: string; type: 'invite_upsert'; payload: SharedStopInvite; createdAt: string }
+  | { key: string; type: 'invite_delete'; payload: { id: string }; createdAt: string };
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -135,6 +137,22 @@ export interface ItineraryStop {
   details: string;
   isMandatory?: boolean;
   isPersonal?: boolean;
+  sharedInviteId?: string;
+  sharedByName?: string;
+}
+
+export type InviteResponseStatus = 'pending' | 'accepted' | 'declined';
+
+export interface SharedStopInvite {
+  id: string;
+  kind: 'stop_invite';
+  createdById: GroupMemberId;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  stop: ItineraryStop;
+  invitedMemberIds: GroupMemberId[];
+  responses: Partial<Record<GroupMemberId, InviteResponseStatus>>;
 }
 
 export interface PersonalItineraryState {

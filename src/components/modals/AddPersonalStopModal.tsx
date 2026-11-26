@@ -1,6 +1,20 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Clock, MapPin, Plus, Search, Sparkles, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Compass,
+  MapPin,
+  PencilLine,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  Users,
+  X,
+} from 'lucide-react';
+import { GROUP_MEMBERS } from '../../data/members';
 import {
   findSameAttractionStops,
   findTimeConflicts,
@@ -8,8 +22,16 @@ import {
   validateAndNormalizeTimeInput,
 } from '../../lib/scheduleUtils';
 import { handleImgError } from '../../lib/utils';
-import type { AttractionMeta, ItineraryDay, ItineraryStop, ShiftType } from '../../types';
+import type {
+  AttractionMeta,
+  GroupMemberId,
+  ItineraryDay,
+  ItineraryStop,
+  MemberCloudProfile,
+  ShiftType,
+} from '../../types';
 import { HoyoDialog } from '../ui/HoyoDialog';
+import { UserAvatar } from '../ui/UserAvatar';
 
 interface AddPersonalStopModalProps {
   open: boolean;
@@ -18,8 +40,11 @@ interface AddPersonalStopModalProps {
   defaultDate: string;
   attractions: AttractionMeta[];
   allActiveStops: ItineraryStop[];
+  activeMemberId: GroupMemberId | null;
+  memberProfiles: Partial<Record<GroupMemberId, MemberCloudProfile>>;
+  userProfiles: Record<string, string>;
   preselectedAttractionId?: string | null;
-  onAddStop: (stop: ItineraryStop) => void;
+  onAddStop: (stop: ItineraryStop, invitedMemberIds: GroupMemberId[]) => void;
   onOpenNewPlaceModal: (targetDate: string, targetShift: ShiftType) => void;
 }
 
@@ -32,24 +57,35 @@ export function AddPersonalStopModal({
   defaultDate,
   attractions,
   allActiveStops,
+  activeMemberId,
+  memberProfiles,
+  userProfiles,
   preselectedAttractionId,
   onAddStop,
   onOpenNewPlaceModal,
 }: AddPersonalStopModalProps) {
+  const [mode, setMode] = useState<'explore' | 'manual'>('explore');
   const [selectedDay, setSelectedDay] = useState(defaultDate);
   const [shift, setShift] = useState<ShiftType>('Tarde');
   const [query, setQuery] = useState('');
   const [selectedAttrId, setSelectedAttrId] = useState<string | null>(null);
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualSubtitle, setManualSubtitle] = useState('');
   const [timeLabel, setTimeLabel] = useState('');
   const [customNote, setCustomNote] = useState('');
+  const [invitedMemberIds, setInvitedMemberIds] = useState<GroupMemberId[]>([]);
 
   useEffect(() => {
     if (!open) return;
+    setMode('explore');
     setSelectedDay(defaultDate);
     setSelectedAttrId(preselectedAttractionId || null);
     setQuery('');
+    setManualTitle('');
+    setManualSubtitle('');
     setTimeLabel('');
     setCustomNote('');
+    setInvitedMemberIds([]);
   }, [open, defaultDate, preselectedAttractionId]);
 
   const availableAttractions = useMemo(() => {
@@ -75,9 +111,13 @@ export function AddPersonalStopModal({
   );
 
   const sameAttractionWarnings = useMemo(() => {
-    if (!selectedAttr) return [];
-    return findSameAttractionStops(selectedAttr.id, selectedAttr.name, allActiveStops);
-  }, [selectedAttr, allActiveStops]);
+    if (mode === 'explore') {
+      if (!selectedAttr) return [];
+      return findSameAttractionStops(selectedAttr.id, selectedAttr.name, allActiveStops);
+    }
+    if (manualTitle.trim().length < 4) return [];
+    return findSameAttractionStops('', manualTitle.trim(), allActiveStops);
+  }, [mode, selectedAttr, manualTitle, allActiveStops]);
 
   const timeValidation = useMemo(
     () => validateAndNormalizeTimeInput(timeLabel),
@@ -95,32 +135,72 @@ export function AddPersonalStopModal({
   const hasWarnings =
     sameAttractionWarnings.length > 0 || timeConflictWarnings.length > 0;
 
+  const otherMembers = useMemo(
+    () =>
+      activeMemberId
+        ? GROUP_MEMBERS.filter((m) => m.id !== activeMemberId)
+        : [],
+    [activeMemberId]
+  );
+
+  const getMemberPhoto = (memberId: GroupMemberId, name: string) =>
+    memberProfiles[memberId]?.avatarPhoto ||
+    userProfiles[name.trim().toLowerCase()] ||
+    undefined;
+
+  const toggleInviteMember = (memberId: GroupMemberId) => {
+    setInvitedMemberIds((prev) =>
+      prev.includes(memberId)
+        ? prev.filter((id) => id !== memberId)
+        : [...prev, memberId]
+    );
+  };
+
   const formatDayShort = (date: string) => {
     const found = days.find((d) => d.date === date);
     return found ? `${found.shortLabel} (${found.weekday})` : date;
   };
 
+  const canSubmit =
+    timeValidation.valid &&
+    (mode === 'explore' ? Boolean(selectedAttr) : Boolean(manualTitle.trim()));
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAttr || !timeValidation.valid) return;
+    if (!canSubmit) return;
 
-    const created: ItineraryStop = {
-      id: 'stop_personal_' + Date.now().toString(36),
-      dayDate: selectedDay,
-      shift,
-      timeLabel: timeValidation.normalizedLabel,
-      title: selectedAttr.name,
-      subtitle: `${selectedAttr.category} • ${selectedAttr.region}`,
-      attractionId: selectedAttr.id,
-      tags: ['Meu roteiro'],
-      details:
-        customNote.trim() ||
-        selectedAttr.notes ||
-        'Parada adicionada ao seu roteiro pessoal a partir do Explorar.',
-      isPersonal: true,
-    };
+    const isShared = invitedMemberIds.length > 0;
+    const created: ItineraryStop =
+      mode === 'explore'
+        ? {
+            id: 'stop_personal_' + Date.now().toString(36),
+            dayDate: selectedDay,
+            shift,
+            timeLabel: timeValidation.normalizedLabel,
+            title: selectedAttr!.name,
+            subtitle: `${selectedAttr!.category} • ${selectedAttr!.region}`,
+            attractionId: selectedAttr!.id,
+            tags: [isShared ? 'Rolê compartilhado' : 'Meu roteiro'],
+            details:
+              customNote.trim() ||
+              selectedAttr!.notes ||
+              'Parada adicionada ao seu roteiro a partir do Explorar.',
+            isPersonal: !isShared,
+          }
+        : {
+            id: 'stop_personal_' + Date.now().toString(36),
+            dayDate: selectedDay,
+            shift,
+            timeLabel: timeValidation.normalizedLabel,
+            title: manualTitle.trim(),
+            subtitle: manualSubtitle.trim() || undefined,
+            tags: [isShared ? 'Rolê compartilhado' : 'Meu roteiro'],
+            details:
+              customNote.trim() || 'Parada criada diretamente no roteiro.',
+            isPersonal: !isShared,
+          };
 
-    onAddStop(created);
+    onAddStop(created, invitedMemberIds);
     onClose();
   };
 
@@ -151,6 +231,34 @@ export function AddPersonalStopModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* Modo: Do Explorar ou Manual */}
+          <div className="grid grid-cols-2 gap-1.5 hoyo-card-inner p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMode('explore')}
+              className={`text-xs font-bold py-2 px-3 rounded-lg inline-flex items-center justify-center gap-1.5 transition ${
+                mode === 'explore'
+                  ? 'hoyo-accent-btn shadow'
+                  : 'text-[#9BA3C2] hover:text-white'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Do Explorar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('manual')}
+              className={`text-xs font-bold py-2 px-3 rounded-lg inline-flex items-center justify-center gap-1.5 transition ${
+                mode === 'manual'
+                  ? 'hoyo-accent-btn shadow'
+                  : 'text-[#9BA3C2] hover:text-white'
+              }`}
+            >
+              <PencilLine className="w-3.5 h-3.5" />
+              <span>Criar manualmente</span>
+            </button>
+          </div>
+
           {/* Dia & Turno */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
@@ -188,74 +296,104 @@ export function AddPersonalStopModal({
             </div>
           </div>
 
-          {/* Busca no Explorar */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-[11px] font-bold text-[#CBD2EC]">
-                Escolha um lugar do Explorar *
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenNewPlaceModal(selectedDay, shift);
-                }}
-                className="text-[11px] font-bold text-[#8CA0FF] hover:text-white transition"
-              >
-                + Criar lugar novo no Explorar
-              </button>
-            </div>
+          {mode === 'explore' ? (
+            /* Busca no Explorar */
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[11px] font-bold text-[#CBD2EC]">
+                  Escolha um lugar do Explorar *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenNewPlaceModal(selectedDay, shift);
+                  }}
+                  className="text-[11px] font-bold text-[#8CA0FF] hover:text-white transition"
+                >
+                  + Criar lugar novo no Explorar
+                </button>
+              </div>
 
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-[#8F97B8] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar restaurante, parque, loja, bar..."
-                className="w-full hoyo-card-inner rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-[#657EF8]"
-              />
-            </div>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-[#8F97B8] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar restaurante, parque, loja, bar..."
+                  className="w-full hoyo-card-inner rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-[#657EF8]"
+                />
+              </div>
 
-            <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-              {availableAttractions.length === 0 ? (
-                <p className="text-xs text-[#9BA3C2] text-center py-4">
-                  Nenhum lugar encontrado. Clique em “+ Criar lugar novo no Explorar” acima!
-                </p>
-              ) : (
-                availableAttractions.map((attr) => {
-                  const isSelected = attr.id === selectedAttrId;
-                  return (
-                    <button
-                      key={attr.id}
-                      type="button"
-                      onClick={() => setSelectedAttrId(attr.id)}
-                      className={`w-full text-left rounded-xl p-2 border flex items-center gap-2.5 transition ${
-                        isSelected
-                          ? 'bg-[#20274A] border-[#E5B869] shadow'
-                          : 'hoyo-card-inner hover:border-[#8596D6]/45'
-                      }`}
-                    >
-                      <img
-                        src={attr.imageUrl}
-                        alt=""
-                        onError={handleImgError}
-                        className="w-10 h-10 rounded-lg object-cover shrink-0 bg-[#0C0F1D]"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-white truncate">{attr.name}</p>
-                        <p className="text-[10px] text-[#9BA3C2] truncate flex items-center gap-1">
-                          <MapPin className="w-2.5 h-2.5 shrink-0 text-[#E5B869]" />
-                          {attr.category} • {attr.region}
-                        </p>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-[#E5B869] shrink-0" />}
-                    </button>
-                  );
-                })
-              )}
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                {availableAttractions.length === 0 ? (
+                  <p className="text-xs text-[#9BA3C2] text-center py-4">
+                    Nenhum lugar encontrado. Clique em “+ Criar lugar novo no Explorar” acima!
+                  </p>
+                ) : (
+                  availableAttractions.map((attr) => {
+                    const isSelected = attr.id === selectedAttrId;
+                    return (
+                      <button
+                        key={attr.id}
+                        type="button"
+                        onClick={() => setSelectedAttrId(attr.id)}
+                        className={`w-full text-left rounded-xl p-2 border flex items-center gap-2.5 transition ${
+                          isSelected
+                            ? 'bg-[#20274A] border-[#E5B869] shadow'
+                            : 'hoyo-card-inner hover:border-[#8596D6]/45'
+                        }`}
+                      >
+                        <img
+                          src={attr.imageUrl}
+                          alt=""
+                          onError={handleImgError}
+                          className="w-10 h-10 rounded-lg object-cover shrink-0 bg-[#0C0F1D]"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white truncate">{attr.name}</p>
+                          <p className="text-[10px] text-[#9BA3C2] truncate flex items-center gap-1">
+                            <MapPin className="w-2.5 h-2.5 shrink-0 text-[#E5B869]" />
+                            {attr.category} • {attr.region}
+                          </p>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-[#E5B869] shrink-0" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Criação manual */
+            <div className="space-y-2.5">
+              <div>
+                <label className="block text-[11px] font-bold text-[#CBD2EC] mb-1">
+                  Nome do rolê / parada *
+                </label>
+                <input
+                  type="text"
+                  value={manualTitle}
+                  onChange={(e) => setManualTitle(e.target.value)}
+                  placeholder="Ex: Café na Paulista, Compras na 25 de Março..."
+                  className="w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#657EF8]"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-[#CBD2EC] mb-1">
+                  Local / Subtítulo (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={manualSubtitle}
+                  onChange={(e) => setManualSubtitle(e.target.value)}
+                  placeholder="Ex: Av. Paulista • Encontro depois do almoço"
+                  className="w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#657EF8]"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Horário e nota pessoal */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -307,6 +445,75 @@ export function AddPersonalStopModal({
             </div>
           </div>
 
+          {/* Convidar amigos do grupo (opcional) */}
+          {otherMembers.length > 0 && (
+            <div className="rounded-2xl hoyo-card-inner p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-[#CBD2EC] flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#8AE5DB]" />
+                  Convidar amigos do grupo (opcional)
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInvitedMemberIds(
+                      invitedMemberIds.length === otherMembers.length
+                        ? []
+                        : otherMembers.map((m) => m.id)
+                    )
+                  }
+                  className="text-[10px] font-bold text-[#8CA0FF] hover:text-white"
+                >
+                  {invitedMemberIds.length === otherMembers.length
+                    ? 'Limpar'
+                    : 'Selecionar todos'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {otherMembers.map((member) => {
+                  const selected = invitedMemberIds.includes(member.id);
+                  const hasDevice = Boolean(
+                    memberProfiles[member.id]?.trustedDevices?.length
+                  );
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => toggleInviteMember(member.id)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-xl border transition ${
+                        selected
+                          ? 'bg-[#47C5B8]/18 border-[#47C5B8] text-[#BFF4ED]'
+                          : 'bg-[#14192D] border-[#8596D6]/20 text-[#CBD2EC] hover:border-[#8596D6]/45'
+                      }`}
+                    >
+                      <UserAvatar
+                        photo={getMemberPhoto(member.id, member.name)}
+                        name={member.name}
+                        sizeClass="w-5 h-5"
+                        textClass="text-[10px]"
+                      />
+                      <span>{member.name}</span>
+                      {hasDevice && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-[#47C5B8]"
+                          title="Aparelho conectado"
+                        />
+                      )}
+                      {selected && <Check className="w-3.5 h-3.5 text-[#47C5B8]" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-[10px] text-[#9BA3C2]">
+                {invitedMemberIds.length > 0
+                  ? 'Eles vão receber um aviso do mascote para aceitar (com checagem de conflitos no roteiro deles)!'
+                  : 'Sem selecionar ninguém, fica salvo só no seu roteiro pessoal.'}
+              </p>
+            </div>
+          )}
+
           {sameAttractionWarnings.length > 0 && (
             <div className="rounded-2xl bg-[#E5B869]/12 border border-[#E5B869]/45 p-3 text-xs text-[#FCE7BE] space-y-1">
               <p className="font-bold flex items-center gap-1.5 text-[#F6D794]">
@@ -346,16 +553,26 @@ export function AddPersonalStopModal({
 
           <button
             type="submit"
-            disabled={!selectedAttr || !timeValidation.valid}
+            disabled={!canSubmit}
             className={`w-full disabled:opacity-45 disabled:cursor-not-allowed font-extrabold text-xs py-3.5 rounded-xl inline-flex items-center justify-center gap-1.5 transition shadow-lg ${
               hasWarnings
                 ? 'bg-[#E5B869] hover:bg-[#f0c77c] text-[#14192D]'
                 : 'hoyo-accent-btn'
             }`}
           >
-            <Plus className="w-4 h-4" />
+            {invitedMemberIds.length > 0 ? (
+              <Send className="w-4 h-4" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
             <span>
-              {hasWarnings ? 'Adicionar mesmo assim' : 'Adicionar ao meu roteiro'}
+              {invitedMemberIds.length > 0
+                ? hasWarnings
+                  ? `Criar e convidar (${invitedMemberIds.length}) mesmo assim`
+                  : `Criar e convidar (${invitedMemberIds.length})`
+                : hasWarnings
+                ? 'Adicionar mesmo assim'
+                : 'Adicionar ao meu roteiro'}
             </span>
           </button>
         </form>
