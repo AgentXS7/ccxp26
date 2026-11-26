@@ -1,5 +1,6 @@
 import type React from 'react';
 import {
+  Car,
   Eye,
   KeyRound,
   Lock,
@@ -24,6 +25,7 @@ import type {
   PlaceLikeEntry,
   ShiftType,
   StopVoteEntry,
+  TransportLeg,
   TripConfig,
 } from '../../types';
 import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from '../ui/AnimeDecor';
@@ -47,6 +49,8 @@ interface AdminTabProps {
   setStops: React.Dispatch<React.SetStateAction<ItineraryStop[]>>;
   budgetItems: BudgetItem[];
   setBudgetItems: React.Dispatch<React.SetStateAction<BudgetItem[]>>;
+  transportLegs: TransportLeg[];
+  setTransportLegs: React.Dispatch<React.SetStateAction<TransportLeg[]>>;
   checklist: ChecklistItem[];
   setChecklist: React.Dispatch<React.SetStateAction<ChecklistItem[]>>;
   stopVotes: StopVoteEntry[];
@@ -98,9 +102,24 @@ interface AdminTabProps {
       amount: string;
     }>
   >;
+  newTransportForm: {
+    dayLabel: string;
+    route: string;
+    tripsCount: string;
+    uberAvg: string;
+  };
+  setNewTransportForm: React.Dispatch<
+    React.SetStateAction<{
+      dayLabel: string;
+      route: string;
+      tripsCount: string;
+      uberAvg: string;
+    }>
+  >;
   onAdminLogin: (e: React.FormEvent) => void;
   onAddStop: (e: React.FormEvent) => void;
   onAddBudgetItem: (e: React.FormEvent) => void;
+  onAddTransportLeg: (e: React.FormEvent) => void;
   onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
   onSyncNow: () => void;
   showToast: (msg: string, type?: 'success' | 'info') => void;
@@ -115,6 +134,8 @@ export function AdminTab({
   setStops,
   budgetItems,
   setBudgetItems,
+  transportLegs,
+  setTransportLegs,
   checklist,
   setChecklist,
   stopVotes,
@@ -138,9 +159,12 @@ export function AdminTab({
   setNewStopForm,
   newBudgetForm,
   setNewBudgetForm,
+  newTransportForm,
+  setNewTransportForm,
   onAdminLogin,
   onAddStop,
   onAddBudgetItem,
+  onAddTransportLeg,
   onDeletePlaceAsAdmin,
   onSyncNow,
   showToast,
@@ -536,6 +560,180 @@ export function AdminTab({
             </div>
           </div>
 
+          {/* Deslocamentos Uber (Base Editável do Grupo) */}
+          <div className="rounded-3xl hoyo-card p-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Car className="w-4 h-4 text-[#E5B869]" />
+                  Deslocamentos Uber — Base do Grupo ({transportLegs.length})
+                </h3>
+                <p className="text-xs text-[#9BA3C2]">
+                  Valores por carro (a aba Custos divide automaticamente por pessoa; cada amigo também pode ajustar o valor dele).
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              {transportLegs.map((leg) => (
+                <div
+                  key={leg.id}
+                  className="rounded-2xl hoyo-card-inner p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-[#8CA0FF] uppercase">
+                      {leg.dayLabel}
+                    </span>
+                    <p className="text-xs sm:text-sm font-bold text-white">{leg.route}</p>
+                    {leg.metroAlternative && (
+                      <p className="text-[11px] text-[#8AE5DB] mt-0.5">{leg.metroAlternative}</p>
+                    )}
+                  </div>
+
+                  {isAdminAuthenticated ? (
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <label className="flex items-center gap-1 text-[11px] text-[#9BA3C2]">
+                        <span>Trechos</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={leg.tripsCount}
+                          onChange={(e) => {
+                            const val = Math.max(1, Number(e.target.value) || 1);
+                            setTransportLegs((prev) =>
+                              prev.map((l) => (l.id === leg.id ? { ...l, tripsCount: val } : l))
+                            );
+                          }}
+                          className="w-16 bg-[#1D2442] border border-[#8596D6]/25 rounded-xl px-2.5 py-1.5 text-xs text-white text-center"
+                        />
+                      </label>
+
+                      <label className="flex items-center gap-1 text-[11px] text-[#9BA3C2]">
+                        <span>Média R$/carro</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={leg.uberAvg}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            setTransportLegs((prev) =>
+                              prev.map((l) =>
+                                l.id === leg.id
+                                  ? {
+                                      ...l,
+                                      uberAvg: val,
+                                      uberSurge: Number((val * 1.5).toFixed(2)),
+                                    }
+                                  : l
+                              )
+                            );
+                          }}
+                          className="w-24 bg-[#1D2442] border border-[#8596D6]/25 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                        />
+                      </label>
+
+                      <label className="flex items-center gap-1 text-[11px] text-[#9BA3C2]">
+                        <span>Dinâmica R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={leg.uberSurge}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            setTransportLegs((prev) =>
+                              prev.map((l) => (l.id === leg.id ? { ...l, uberSurge: val } : l))
+                            );
+                          }}
+                          className="w-24 bg-[#1D2442] border border-[#8596D6]/25 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Remover o trecho "${leg.route}" da base do grupo?`
+                            )
+                          ) {
+                            setTransportLegs((prev) => prev.filter((l) => l.id !== leg.id));
+                            showToast('Trecho removido da base do grupo.', 'info');
+                          }
+                        }}
+                        className="p-2 rounded-xl bg-[#EC6B6B]/15 border border-[#EC6B6B]/35 text-[#FFD0D0] hover:bg-[#EC6B6B]/30 transition shrink-0"
+                        title="Remover trecho Uber da base do grupo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-[#1D2442] text-white self-start lg:self-center shrink-0">
+                      {leg.tripsCount}x • Média {formatBRL(leg.uberAvg)}/carro • Din.{' '}
+                      {formatBRL(leg.uberSurge)}/carro
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {isAdminAuthenticated && (
+              <form
+                onSubmit={onAddTransportLeg}
+                className="pt-4 border-t border-[#8596D6]/15 grid grid-cols-1 sm:grid-cols-5 gap-2.5"
+              >
+                <input
+                  type="text"
+                  value={newTransportForm.dayLabel}
+                  onChange={(e) =>
+                    setNewTransportForm({ ...newTransportForm, dayLabel: e.target.value })
+                  }
+                  placeholder="Dia (ex: 04/12 Sex)"
+                  className="hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white"
+                />
+                <input
+                  type="text"
+                  value={newTransportForm.route}
+                  onChange={(e) =>
+                    setNewTransportForm({ ...newTransportForm, route: e.target.value })
+                  }
+                  placeholder="Rota (ex: Vila Mariana ↔ Pinheiros)"
+                  className="sm:col-span-2 hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={newTransportForm.tripsCount}
+                    onChange={(e) =>
+                      setNewTransportForm({ ...newTransportForm, tripsCount: e.target.value })
+                    }
+                    placeholder="Trechos"
+                    className="hoyo-card-inner rounded-xl px-2.5 py-2 text-xs text-white"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newTransportForm.uberAvg}
+                    onChange={(e) =>
+                      setNewTransportForm({ ...newTransportForm, uberAvg: e.target.value })
+                    }
+                    placeholder="Média R$"
+                    className="hoyo-card-inner rounded-xl px-2.5 py-2 text-xs text-white"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="hoyo-accent-btn font-bold text-xs py-2 px-4 rounded-xl flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Adicionar Trecho
+                </button>
+              </form>
+            )}
+          </div>
+
           <div className="rounded-3xl hoyo-card p-5 space-y-3">
             <h3 className="text-base font-bold text-white">
               {isAdminAuthenticated
@@ -556,7 +754,7 @@ export function AdminTab({
                   </div>
 
                   {isAdminAuthenticated ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-[#9BA3C2]">R$</span>
                       <input
                         type="number"
@@ -574,6 +772,23 @@ export function AdminTab({
                         placeholder="A confirmar"
                         className="w-32 bg-[#1D2442] border border-[#8596D6]/25 rounded-xl px-3 py-1.5 text-xs text-white"
                       />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Remover "${item.name}" da tabela de valores do grupo?`
+                            )
+                          ) {
+                            setBudgetItems((prev) => prev.filter((b) => b.id !== item.id));
+                            showToast(`"${item.name}" removido da tabela de custos.`, 'info');
+                          }
+                        }}
+                        className="p-2 rounded-xl bg-[#EC6B6B]/15 border border-[#EC6B6B]/35 text-[#FFD0D0] hover:bg-[#EC6B6B]/30 transition shrink-0"
+                        title="Remover gasto da base do grupo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ) : (
                     <span
@@ -649,6 +864,11 @@ export function AdminTab({
                   <Plus className="w-4 h-4" /> Adicionar Custo
                 </button>
               </form>
+            )}
+            {isAdminAuthenticated && (
+              <p className="text-[11px] text-[#9BA3C2] pt-1">
+                Itens da categoria &ldquo;Transporte&rdquo; (ex.: Passagem aérea, Metrô, Transfer) aparecem em Transporte &amp; Deslocamentos na aba Custos.
+              </p>
             )}
           </div>
         </div>

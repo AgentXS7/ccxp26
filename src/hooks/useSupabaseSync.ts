@@ -13,6 +13,7 @@ import type {
   OfflineQueueOp,
   PlaceLikeEntry,
   StopVoteEntry,
+  TransportLeg,
   TripConfig,
 } from '../types';
 
@@ -27,6 +28,8 @@ interface UseSupabaseSyncParams {
   setStops: React.Dispatch<React.SetStateAction<ItineraryStop[]>>;
   budgetItems: BudgetItem[];
   setBudgetItems: React.Dispatch<React.SetStateAction<BudgetItem[]>>;
+  transportLegs: TransportLeg[];
+  setTransportLegs: React.Dispatch<React.SetStateAction<TransportLeg[]>>;
   checklist: ChecklistItem[];
   setChecklist: React.Dispatch<React.SetStateAction<ChecklistItem[]>>;
   stopVotes: StopVoteEntry[];
@@ -60,6 +63,8 @@ export function useSupabaseSync({
   setStops,
   budgetItems,
   setBudgetItems,
+  transportLegs,
+  setTransportLegs,
   checklist,
   setChecklist,
   stopVotes,
@@ -322,6 +327,7 @@ export function useSupabaseSync({
 
         if (Array.isArray(placesRows)) {
           let nextRemovedIds: string[] = [];
+          let cloudTransportLegs: TransportLeg[] | null = null;
           const cloudProfiles: Record<string, string | null> = {};
           const cloudMembers: Partial<Record<GroupMemberId, MemberCloudProfile>> = {};
           const cloudCustom: AttractionMeta[] = [];
@@ -334,6 +340,13 @@ export function useSupabaseSync({
             if (id === 'sys_removed_places' && payload.kind === 'removed_places') {
               if (Array.isArray(payload.ids)) {
                 nextRemovedIds = payload.ids.map(String);
+              }
+              return;
+            }
+
+            if (id === 'sys_transport_legs' && payload.kind === 'transport_legs') {
+              if (Array.isArray(payload.legs)) {
+                cloudTransportLegs = payload.legs as TransportLeg[];
               }
               return;
             }
@@ -371,6 +384,9 @@ export function useSupabaseSync({
           });
 
           setRemovedPlaceIds(nextRemovedIds);
+          if (cloudTransportLegs !== null) {
+            setTransportLegs(cloudTransportLegs);
+          }
           const removedSet = new Set(nextRemovedIds);
 
           if (Object.keys(cloudMembers).length > 0) {
@@ -638,19 +654,34 @@ export function useSupabaseSync({
   const pushSharedStateToCloud = useCallback(async () => {
     if (!hasSupabase) return;
     try {
-      await cloudFetch('trip_shared_state?on_conflict=id', {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify({
-          id: 'sp2026_main',
-          airbnb_total_cost: config.airbnbTotalCost,
-          arrival_window_note: config.arrivalWindowNote,
-          checklist,
-          budget_items: budgetItems,
-          custom_stops: stops,
-          updated_at: new Date().toISOString(),
+      await Promise.all([
+        cloudFetch('trip_shared_state?on_conflict=id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            id: 'sp2026_main',
+            airbnb_total_cost: config.airbnbTotalCost,
+            arrival_window_note: config.arrivalWindowNote,
+            checklist,
+            budget_items: budgetItems,
+            custom_stops: stops,
+            updated_at: new Date().toISOString(),
+          }),
         }),
-      });
+        cloudFetch('custom_places?on_conflict=id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            id: 'sys_transport_legs',
+            payload: {
+              kind: 'transport_legs',
+              legs: transportLegs,
+              updatedAt: new Date().toISOString(),
+            },
+            created_at: new Date().toISOString(),
+          }),
+        }),
+      ]);
       setSyncStatus('synced');
       setSyncErrorDetail('');
       setLastSyncedAt(
@@ -668,6 +699,7 @@ export function useSupabaseSync({
     checklist,
     budgetItems,
     stops,
+    transportLegs,
   ]);
 
   // Envia automaticamente alterações do organizador para o Supabase

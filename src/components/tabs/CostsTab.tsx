@@ -253,6 +253,130 @@ export function CostsTab({
     : airbnbOfficialShare;
   const airbnbPaid = Boolean(personalBudget.paidMap['airbnb-base']);
 
+  const transportBudgetItems = budgetItems.filter((i) => i.category === 'Transporte');
+
+  const renderBudgetItemRow = (item: BudgetItem) => {
+    const isIncluded =
+      personalBudget.includedOverrides[item.id] !== undefined
+        ? personalBudget.includedOverrides[item.id]
+        : item.included;
+    const hasOverride = personalBudget.amountOverrides[item.id] !== undefined;
+    const effectiveAmount = hasOverride
+      ? personalBudget.amountOverrides[item.id]
+      : item.amountPerPerson;
+    const isPaid = Boolean(personalBudget.paidMap[item.id]);
+    const isEditing = editingItemId === item.id;
+
+    return (
+      <div
+        key={item.id}
+        className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-2xl hoyo-card-inner p-3.5 hover:border-[#E5B869]/35 transition ${
+          !isIncluded ? 'opacity-55' : ''
+        }`}
+      >
+        <label className="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+          <input
+            type="checkbox"
+            checked={isIncluded}
+            onChange={() => toggleOfficialIncluded(item)}
+            className="mt-1 rounded w-4 h-4 shrink-0"
+          />
+          <span>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs sm:text-sm font-bold text-white">{item.name}</span>
+              {item.isOptional && (
+                <span className="text-[10px] font-bold bg-[#212847] text-[#CBD2EC] px-2 py-0.5 rounded">
+                  Opcional
+                </span>
+              )}
+              {hasOverride && (
+                <span className="text-[10px] font-bold hoyo-accent-pill border px-1.5 py-0.5 rounded">
+                  Meu valor
+                </span>
+              )}
+            </span>
+            <span className="text-[11px] text-[#9BA3C2] mt-0.5 block">{item.subtitle}</span>
+          </span>
+        </label>
+
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+          {isIncluded && effectiveAmount !== null && effectiveAmount > 0 && (
+            <button
+              type="button"
+              onClick={() => togglePaid(item.id)}
+              className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
+                isPaid
+                  ? 'bg-[#47C5B8]/20 border-[#47C5B8]/45 text-[#8AE5DB]'
+                  : 'bg-[#171C33] border-[#8596D6]/20 text-[#9BA3C2] hover:text-white'
+              }`}
+            >
+              {isPaid ? '✓ Pago' : 'Pago?'}
+            </button>
+          )}
+
+          {isEditing ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                autoFocus
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveAmountOverride(item.id);
+                  if (e.key === 'Escape') setEditingItemId(null);
+                }}
+                placeholder="R$"
+                className="w-24 bg-[#14192D] border border-[#657EF8] rounded-lg px-2 py-1 text-xs text-white"
+              />
+              <button
+                type="button"
+                onClick={() => saveAmountOverride(item.id)}
+                className="p-1.5 rounded-lg hoyo-accent-btn"
+                title="Salvar meu valor"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              {hasOverride && (
+                <button
+                  type="button"
+                  onClick={() => resetAmountOverride(item.id)}
+                  className="p-1.5 rounded-lg bg-[#212847] text-[#CBD2EC]"
+                  title="Voltar ao padrão do grupo"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => startEditingAmount(item.id, effectiveAmount)}
+              title="Toque para personalizar o seu valor (não altera o grupo)"
+              className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-lg border border-transparent hover:border-[#E5B869]/50 transition ${
+                effectiveAmount === null
+                  ? 'bg-[#E5B869]/15 text-[#F6D794]'
+                  : effectiveAmount === 0
+                  ? 'bg-[#47C5B8]/15 text-[#8AE5DB]'
+                  : 'bg-[#1F2644] text-white'
+              }`}
+            >
+              <span>
+                {effectiveAmount === null
+                  ? 'A confirmar'
+                  : effectiveAmount === 0
+                  ? 'Grátis'
+                  : formatBRL(effectiveAmount)}
+              </span>
+              <Pencil className="w-3 h-3 opacity-60" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
       {!canEdit && (
@@ -504,8 +628,8 @@ export function CostsTab({
         {/* Barra de aviso + restaurar */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-[#9BA3C2] border-t border-[#8596D6]/15">
           <span>
-            💡 Toque no valor de qualquer item (inclusive “A confirmar”) para colocar o{' '}
-            <strong className="text-[#CBD2EC]">seu valor real</strong> — fica salvo só no seu aparelho sem mudar o grupo.
+            💡 Toque no valor de qualquer item (inclusive Uber ou “A confirmar”) para colocar o{' '}
+            <strong className="text-[#CBD2EC]">seu valor real</strong> — fica salvo no seu perfil sem mudar a base do grupo.
           </span>
           {hasPersonalCustomizations && (
             <button
@@ -604,15 +728,18 @@ export function CostsTab({
         </div>
       )}
 
-      {/* Deslocamentos Uber & Metrô */}
+      {/* Transporte & Deslocamentos (Uber + itens extras da base Transporte) */}
       <div className="rounded-3xl hoyo-card p-5 space-y-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <Car className="w-4 h-4 text-[#E5B869]" />
-            Deslocamentos Estimados (Uber ÷ {peoplePerCar} pessoas)
+            Transporte &amp; Deslocamentos (Uber ÷ {peoplePerCar} pessoas)
           </h3>
           <span className="text-xs font-bold text-[#8AE5DB] shrink-0">
             {formatBRL(financialSummary.byCategory.Transporte.documentedTotal)} / pessoa
+            {financialSummary.byCategory.Transporte.pendingCount > 0
+              ? ` (+ ${financialSummary.byCategory.Transporte.pendingCount} a confirmar)`
+              : ''}
           </span>
         </div>
 
@@ -622,13 +749,19 @@ export function CostsTab({
               personalBudget.transportOverrides[leg.id] !== undefined
                 ? personalBudget.transportOverrides[leg.id]
                 : leg.included;
+            const hasOverride = personalBudget.amountOverrides[leg.id] !== undefined;
             const isPaid = Boolean(personalBudget.paidMap[leg.id]);
             const unitFare = useSurgePricing ? leg.uberSurge : leg.uberAvg;
-            const perPerson = (unitFare * leg.tripsCount) / Math.max(1, peoplePerCar);
+            const defaultPerPerson = (unitFare * leg.tripsCount) / Math.max(1, peoplePerCar);
+            const effectivePerPerson = hasOverride
+              ? personalBudget.amountOverrides[leg.id]
+              : defaultPerPerson;
+            const isEditing = editingItemId === leg.id;
+
             return (
               <div
                 key={leg.id}
-                className={`flex items-start justify-between gap-3 rounded-2xl hoyo-card-inner p-3.5 hover:border-[#E5B869]/35 transition ${
+                className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-2xl hoyo-card-inner p-3.5 hover:border-[#E5B869]/35 transition ${
                   !isIncluded ? 'opacity-55' : ''
                 }`}
               >
@@ -640,8 +773,15 @@ export function CostsTab({
                     className="mt-1 rounded w-4 h-4 shrink-0"
                   />
                   <span className="space-y-0.5 block">
-                    <span className="text-[11px] font-bold text-[#8CA0FF] block">
-                      {leg.dayLabel} • {leg.tripsCount} trecho(s)
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-[#8CA0FF]">
+                        {leg.dayLabel} • {leg.tripsCount} trecho(s)
+                      </span>
+                      {hasOverride && (
+                        <span className="text-[10px] font-bold hoyo-accent-pill border px-1.5 py-0.5 rounded">
+                          Meu valor
+                        </span>
+                      )}
                     </span>
                     <span className="text-xs sm:text-sm font-bold text-white block">
                       {leg.route}
@@ -654,8 +794,8 @@ export function CostsTab({
                   </span>
                 </label>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {isIncluded && (
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {isIncluded && effectivePerPerson > 0 && (
                     <button
                       type="button"
                       onClick={() => togglePaid(leg.id)}
@@ -668,19 +808,76 @@ export function CostsTab({
                       {isPaid ? '✓ Pago' : 'Pago?'}
                     </button>
                   )}
-                  <div className="text-right">
-                    <span className="text-xs sm:text-sm font-extrabold text-white block">
-                      {formatBRL(perPerson)}
-                    </span>
-                    <span className="text-[10px] text-[#9BA3C2]">
-                      {formatBRL(unitFare)}/carro
-                    </span>
-                  </div>
+
+                  {isEditing ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        autoFocus
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveAmountOverride(leg.id);
+                          if (e.key === 'Escape') setEditingItemId(null);
+                        }}
+                        placeholder="R$"
+                        className="w-24 bg-[#14192D] border border-[#657EF8] rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveAmountOverride(leg.id)}
+                        className="p-1.5 rounded-lg hoyo-accent-btn"
+                        title="Salvar meu valor"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      {hasOverride && (
+                        <button
+                          type="button"
+                          onClick={() => resetAmountOverride(leg.id)}
+                          className="p-1.5 rounded-lg bg-[#212847] text-[#CBD2EC]"
+                          title="Voltar ao padrão do grupo"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          startEditingAmount(leg.id, Number(effectivePerPerson.toFixed(2)))
+                        }
+                        title="Toque para personalizar sua parte neste trecho (não altera o grupo)"
+                        className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-extrabold px-2.5 py-1 rounded-lg bg-[#1F2644] text-white border border-transparent hover:border-[#E5B869]/50 transition"
+                      >
+                        <span>{formatBRL(effectivePerPerson)}</span>
+                        <Pencil className="w-3 h-3 opacity-60" />
+                      </button>
+                      <span className="text-[10px] text-[#9BA3C2] block mt-0.5">
+                        {hasOverride
+                          ? `Base grupo: ${formatBRL(defaultPerPerson)}`
+                          : `${formatBRL(unitFare)}/carro`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+
+        {transportBudgetItems.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-[#8596D6]/15 space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8CA0FF]">
+              Outros gastos de Transporte (Base do Grupo)
+            </p>
+            <div className="space-y-2">{transportBudgetItems.map(renderBudgetItemRow)}</div>
+          </div>
+        )}
       </div>
 
       {/* Itens por Categoria (Base Oficial + Sobrescritas Pessoais) */}
@@ -814,133 +1011,7 @@ export function CostsTab({
                 </div>
               )}
 
-              <div className="space-y-2">
-                {itemsInCat.map((item) => {
-                  const isIncluded =
-                    personalBudget.includedOverrides[item.id] !== undefined
-                      ? personalBudget.includedOverrides[item.id]
-                      : item.included;
-                  const hasOverride = personalBudget.amountOverrides[item.id] !== undefined;
-                  const effectiveAmount = hasOverride
-                    ? personalBudget.amountOverrides[item.id]
-                    : item.amountPerPerson;
-                  const isPaid = Boolean(personalBudget.paidMap[item.id]);
-                  const isEditing = editingItemId === item.id;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-2xl hoyo-card-inner p-3.5 hover:border-[#E5B869]/35 transition ${
-                        !isIncluded ? 'opacity-55' : ''
-                      }`}
-                    >
-                      <label className="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={isIncluded}
-                          onChange={() => toggleOfficialIncluded(item)}
-                          className="mt-1 rounded w-4 h-4 shrink-0"
-                        />
-                        <span>
-                          <span className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-xs sm:text-sm font-bold text-white">
-                              {item.name}
-                            </span>
-                            {item.isOptional && (
-                              <span className="text-[10px] font-bold bg-[#212847] text-[#CBD2EC] px-2 py-0.5 rounded">
-                                Opcional
-                              </span>
-                            )}
-                            {hasOverride && (
-                              <span className="text-[10px] font-bold hoyo-accent-pill border px-1.5 py-0.5 rounded">
-                                Meu valor
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-[11px] text-[#9BA3C2] mt-0.5 block">
-                            {item.subtitle}
-                          </span>
-                        </span>
-                      </label>
-
-                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                        {isIncluded && effectiveAmount !== null && effectiveAmount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => togglePaid(item.id)}
-                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
-                              isPaid
-                                ? 'bg-[#47C5B8]/20 border-[#47C5B8]/45 text-[#8AE5DB]'
-                                : 'bg-[#171C33] border-[#8596D6]/20 text-[#9BA3C2] hover:text-white'
-                            }`}
-                          >
-                            {isPaid ? '✓ Pago' : 'Pago?'}
-                          </button>
-                        )}
-
-                        {isEditing ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              autoFocus
-                              value={editingValue}
-                              onChange={(e) => setEditingValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveAmountOverride(item.id);
-                                if (e.key === 'Escape') setEditingItemId(null);
-                              }}
-                              placeholder="R$"
-                              className="w-24 bg-[#14192D] border border-[#657EF8] rounded-lg px-2 py-1 text-xs text-white"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => saveAmountOverride(item.id)}
-                              className="p-1.5 rounded-lg hoyo-accent-btn"
-                              title="Salvar meu valor"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                            {hasOverride && (
-                              <button
-                                type="button"
-                                onClick={() => resetAmountOverride(item.id)}
-                                className="p-1.5 rounded-lg bg-[#212847] text-[#CBD2EC]"
-                                title="Voltar ao padrão do grupo"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => startEditingAmount(item.id, effectiveAmount)}
-                            title="Toque para personalizar o seu valor (não altera o grupo)"
-                            className={`inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-lg border border-transparent hover:border-[#E5B869]/50 transition ${
-                              effectiveAmount === null
-                                ? 'bg-[#E5B869]/15 text-[#F6D794]'
-                                : effectiveAmount === 0
-                                ? 'bg-[#47C5B8]/15 text-[#8AE5DB]'
-                                : 'bg-[#1F2644] text-white'
-                            }`}
-                          >
-                            <span>
-                              {effectiveAmount === null
-                                ? 'A confirmar'
-                                : effectiveAmount === 0
-                                ? 'Grátis'
-                                : formatBRL(effectiveAmount)}
-                            </span>
-                            <Pencil className="w-3 h-3 opacity-60" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <div className="space-y-2">{itemsInCat.map(renderBudgetItemRow)}</div>
             </div>
           );
         }

@@ -150,7 +150,7 @@ export default function App() {
     STORAGE_KEYS.BUDGET,
     INITIAL_BUDGET_ITEMS
   );
-  const [transportLegs] = usePersistedState<TransportLeg[]>(
+  const [transportLegs, setTransportLegs] = usePersistedState<TransportLeg[]>(
     STORAGE_KEYS.TRANSPORT,
     INITIAL_TRANSPORT_LEGS
   );
@@ -281,6 +281,8 @@ export default function App() {
     setStops,
     budgetItems,
     setBudgetItems,
+    transportLegs,
+    setTransportLegs,
     checklist,
     setChecklist,
     stopVotes,
@@ -739,8 +741,10 @@ export default function App() {
           ? personalBudget.transportOverrides[leg.id]
           : leg.included;
       if (!isIncluded) return acc;
+      const hasOverride = personalBudget.amountOverrides[leg.id] !== undefined;
       const unitFare = useSurgePricing ? leg.uberSurge : leg.uberAvg;
-      const legCost = (unitFare * leg.tripsCount) / Math.max(1, peoplePerCar);
+      const defaultCost = (unitFare * leg.tripsCount) / Math.max(1, peoplePerCar);
+      const legCost = hasOverride ? personalBudget.amountOverrides[leg.id] : defaultCost;
       if (personalBudget.paidMap[leg.id]) paidTotal += legCost;
       return acc + legCost;
     }, 0);
@@ -1246,6 +1250,13 @@ export default function App() {
     amount: '',
   });
 
+  const [newTransportForm, setNewTransportForm] = useState({
+    dayLabel: '',
+    route: '',
+    tripsCount: '2',
+    uberAvg: '',
+  });
+
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (pinInput.trim() === config.adminPin) {
@@ -1297,6 +1308,28 @@ export default function App() {
     setBudgetItems((prev) => [...prev, created]);
     setNewBudgetForm({ category: 'Alimentação', name: '', subtitle: '', amount: '' });
     showToast('Item adicionado ao orçamento!');
+  };
+
+  const handleAddTransportLeg = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdminAuthenticated) return;
+    const cleanRoute = newTransportForm.route.trim();
+    const parsedAvg = Number(newTransportForm.uberAvg.trim().replace(',', '.'));
+    const parsedTrips = Math.max(1, Number(newTransportForm.tripsCount) || 1);
+    if (!cleanRoute || Number.isNaN(parsedAvg) || parsedAvg < 0) return;
+
+    const created: TransportLeg = {
+      id: 'leg_custom_' + Date.now().toString(36),
+      dayLabel: newTransportForm.dayLabel.trim() || 'Deslocamento extra',
+      route: cleanRoute,
+      uberAvg: parsedAvg,
+      uberSurge: Number((parsedAvg * 1.5).toFixed(2)),
+      tripsCount: parsedTrips,
+      included: true,
+    };
+    setTransportLegs((prev) => [...prev, created]);
+    setNewTransportForm({ dayLabel: '', route: '', tripsCount: '2', uberAvg: '' });
+    showToast('Novo trecho Uber adicionado à base do grupo!');
   };
 
   return (
@@ -1492,6 +1525,8 @@ export default function App() {
             setStops={setStops}
             budgetItems={budgetItems}
             setBudgetItems={setBudgetItems}
+            transportLegs={transportLegs}
+            setTransportLegs={setTransportLegs}
             checklist={checklist}
             setChecklist={setChecklist}
             stopVotes={stopVotes}
@@ -1515,9 +1550,12 @@ export default function App() {
             setNewStopForm={setNewStopForm}
             newBudgetForm={newBudgetForm}
             setNewBudgetForm={setNewBudgetForm}
+            newTransportForm={newTransportForm}
+            setNewTransportForm={setNewTransportForm}
             onAdminLogin={handleAdminLogin}
             onAddStop={handleAddStop}
             onAddBudgetItem={handleAddBudgetItem}
+            onAddTransportLeg={handleAddTransportLeg}
             onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
             onSyncNow={() => {
               syncFromCloud(false);
