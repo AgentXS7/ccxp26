@@ -1000,14 +1000,26 @@ export default function App() {
     [days, selectedDate]
   );
 
+  const receivedInvitesForMe = useMemo(() => {
+    if (!activeMemberId) return [];
+    return stopInvites.filter((inv) => inv.invitedMemberIds.includes(activeMemberId));
+  }, [stopInvites, activeMemberId]);
+
   const pendingInvitesForMe = useMemo(() => {
     if (!activeMemberId) return [];
-    return stopInvites.filter(
-      (inv) =>
-        inv.invitedMemberIds.includes(activeMemberId) &&
-        (inv.responses[activeMemberId] ?? 'pending') === 'pending'
+    return receivedInvitesForMe.filter(
+      (inv) => (inv.responses[activeMemberId] ?? 'pending') === 'pending'
     );
-  }, [stopInvites, activeMemberId]);
+  }, [receivedInvitesForMe, activeMemberId]);
+
+  const handleOpenInvites = () => {
+    if (!activeMemberId) {
+      showToast('Selecione seu perfil do grupo para ver seus convites.', 'info');
+      openVoterModal();
+      return;
+    }
+    setInvitesModalOpen(true);
+  };
 
   const sentInvitesByMe = useMemo(() => {
     if (!activeMemberId) return [];
@@ -1489,7 +1501,7 @@ export default function App() {
           voterName={effectiveVoterName}
           pendingInvites={pendingInvitesForMe}
           days={days}
-          onOpenInvites={() => setInvitesModalOpen(true)}
+          onOpenInvites={handleOpenInvites}
           onHide={() => {
             setUserPrefs((p) => ({ ...p, showMascot: false }));
             showToast('Mascote escondido. Dá pra trazer de volta no 🎨 Tema!', 'info');
@@ -1519,6 +1531,8 @@ export default function App() {
         avatarPhoto={userPrefs.avatarPhoto}
         onOpenVoterModal={openVoterModal}
         onOpenThemeModal={() => setThemeModalOpen(true)}
+        pendingInvitesCount={pendingInvitesForMe.length}
+        onOpenInvites={handleOpenInvites}
         onCopyLink={handleCopyOnlyLink}
         onShareWhatsApp={handleShareWhatsApp}
       />
@@ -1600,7 +1614,7 @@ export default function App() {
               if (!requireTrustedMember('adicionar ao roteiro')) return;
               setPersonalStopModal({ open: true, attractionId: null });
             }}
-            onOpenInvites={() => setInvitesModalOpen(true)}
+            onOpenInvites={handleOpenInvites}
             onCancelOrLeaveSharedStop={handleCancelOrLeaveSharedStop}
             onHideOfficialStop={handleHideOfficialStop}
             onRemovePersonalStop={handleRemovePersonalStop}
@@ -1781,7 +1795,7 @@ export default function App() {
         days={days}
         attractions={attractions}
         activeMemberId={activeMemberId}
-        pendingInvites={pendingInvitesForMe}
+        receivedInvites={receivedInvitesForMe}
         sentInvites={sentInvitesByMe}
         allActiveStops={allActiveStops}
         userProfiles={userProfiles}

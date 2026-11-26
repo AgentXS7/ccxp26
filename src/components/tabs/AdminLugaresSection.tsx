@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Lock, MapPin, Search, Trash2 } from 'lucide-react';
 import { handleImgError } from '../../lib/utils';
 import type { AttractionMeta } from '../../types';
+import { useConfirm } from '../ui/ConfirmProvider';
 
 interface AdminLugaresSectionProps {
   attractions: AttractionMeta[];
@@ -14,6 +15,7 @@ export function AdminLugaresSection({
   isAdminAuthenticated,
   onDeletePlaceAsAdmin,
 }: AdminLugaresSectionProps) {
+  const confirm = useConfirm();
   const [query, setQuery] = useState('');
 
   const activeAttractions = useMemo(
@@ -103,12 +105,14 @@ export function AdminLugaresSection({
               {isAdminAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Excluir "${attr.name}" do Explorar para todo o grupo?`
-                      )
-                    ) {
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Excluir lugar do Explorar?',
+                      message: `Excluir "${attr.name}" do Explorar para todo o grupo?`,
+                      confirmLabel: 'Excluir lugar',
+                      tone: 'danger',
+                    });
+                    if (ok) {
                       onDeletePlaceAsAdmin(attr);
                     }
                   }}

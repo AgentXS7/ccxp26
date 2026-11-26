@@ -25,6 +25,7 @@ import type {
   ItineraryStop,
   ShiftType,
 } from '../../types';
+import { useConfirm } from '../ui/ConfirmProvider';
 
 export interface NewStopFormState {
   dayDate: string;
@@ -61,6 +62,7 @@ export function AdminRoteiroSection({
   onAddStop,
   showToast,
 }: AdminRoteiroSectionProps) {
+  const confirm = useConfirm();
   const [placeQuery, setPlaceQuery] = useState('');
 
   const activeAttractions = useMemo(
@@ -451,12 +453,14 @@ export function AdminRoteiroSection({
                 {isAdminAuthenticated && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Remover "${s.title}" do roteiro oficial do grupo?`
-                        )
-                      ) {
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Remover parada oficial?',
+                        message: `Remover "${s.title}" do roteiro oficial do grupo?`,
+                        confirmLabel: 'Remover parada',
+                        tone: 'danger',
+                      });
+                      if (ok) {
                         setStops((prev) => prev.filter((item) => item.id !== s.id));
                         showToast('Parada removida do roteiro.');
                       }

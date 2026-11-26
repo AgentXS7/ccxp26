@@ -7,6 +7,7 @@ import {
   DollarSign,
   Home,
   Link2,
+  Mail,
   Palette,
   RefreshCw,
   Share2,
@@ -32,6 +33,8 @@ interface HeaderProps {
   avatarPhoto?: string;
   onOpenVoterModal: () => void;
   onOpenThemeModal: () => void;
+  pendingInvitesCount: number;
+  onOpenInvites: () => void;
   onCopyLink: () => void;
   onShareWhatsApp: () => void;
 }
@@ -59,6 +62,8 @@ export function Header({
   avatarPhoto,
   onOpenVoterModal,
   onOpenThemeModal,
+  pendingInvitesCount,
+  onOpenInvites,
   onCopyLink,
   onShareWhatsApp,
 }: HeaderProps) {
@@ -137,6 +142,26 @@ export function Header({
             aria-label="Personalizar tema"
           >
             <Palette className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Caixa de Convites (Roteiros Recebidos & Enviados) */}
+          <button
+            type="button"
+            onClick={onOpenInvites}
+            className={`relative inline-flex items-center justify-center p-2 rounded-xl border transition shrink-0 ${
+              pendingInvitesCount > 0
+                ? 'bg-[#47C5B8]/18 border-[#47C5B8]/55 text-[#8AE5DB]'
+                : 'bg-[#171C33] border-[#8596D6]/20 text-[#CAD4FF] hover:border-[#E5B869]/45 hover:text-white'
+            }`}
+            title="Roteiros recebidos e enviados"
+            aria-label="Roteiros recebidos e enviados"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            {pendingInvitesCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EC6B6B] text-white text-[10px] font-black leading-none flex items-center justify-center border-2 border-[#0C0F1D] animate-pulse">
+                {pendingInvitesCount}
+              </span>
+            )}
           </button>
 
           {/* Status Nuvem Supabase */}

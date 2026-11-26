@@ -28,6 +28,7 @@ import type {
   TripConfig,
 } from '../../types';
 import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from '../ui/AnimeDecor';
+import { useConfirm } from '../ui/ConfirmProvider';
 import { UserAvatar } from '../ui/UserAvatar';
 
 import { AdminLugaresSection } from './AdminLugaresSection';
@@ -153,6 +154,7 @@ export function AdminTab({
   onSyncNow,
   showToast,
 }: AdminTabProps) {
+  const confirm = useConfirm();
   return (
     <div className="space-y-5">
       {/* Barra Superior */}
@@ -636,12 +638,14 @@ export function AdminTab({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remover o trecho "${leg.route}" da base do grupo?`
-                            )
-                          ) {
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: 'Remover trecho Uber?',
+                            message: `Remover o trecho "${leg.route}" da base de custos do grupo?`,
+                            confirmLabel: 'Remover trecho',
+                            tone: 'danger',
+                          });
+                          if (ok) {
                             setTransportLegs((prev) => prev.filter((l) => l.id !== leg.id));
                             showToast('Trecho removido da base do grupo.', 'info');
                           }
@@ -758,12 +762,14 @@ export function AdminTab({
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remover "${item.name}" da tabela de valores do grupo?`
-                            )
-                          ) {
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: 'Remover custo da base?',
+                            message: `Remover "${item.name}" da tabela de valores do grupo?`,
+                            confirmLabel: 'Remover custo',
+                            tone: 'danger',
+                          });
+                          if (ok) {
                             setBudgetItems((prev) => prev.filter((b) => b.id !== item.id));
                             showToast(`"${item.name}" removido da tabela de custos.`, 'info');
                           }

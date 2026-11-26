@@ -37,6 +37,7 @@ import {
   CornerOrnaments,
   StarSparkleIcon,
 } from '../ui/AnimeDecor';
+import { useConfirm } from '../ui/ConfirmProvider';
 import { OnigiriSticker, StickerForCategory } from '../ui/GameStickers';
 import { UserAvatar } from '../ui/UserAvatar';
 
@@ -117,6 +118,7 @@ export function ItineraryTab({
   onRestoreSingleOfficialStop,
   onRestoreOfficialStops,
 }: ItineraryTabProps) {
+  const confirm = useConfirm();
   const [showHiddenDrawer, setShowHiddenDrawer] = useState(false);
 
   useEffect(() => {
@@ -626,13 +628,22 @@ export function ItineraryTab({
                             {canEdit && (
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={async () => {
                                   const isCreator =
                                     sharedInvite.createdById === activeMemberId;
-                                  const msg = isCreator
-                                    ? `Cancelar e remover "${stop.title}" para todos os convidados?`
-                                    : `Sair do rolê "${stop.title}"?`;
-                                  if (window.confirm(msg)) {
+                                  const ok = await confirm({
+                                    title: isCreator
+                                      ? 'Cancelar convite?'
+                                      : 'Sair do rolê?',
+                                    message: isCreator
+                                      ? `Cancelar e remover "${stop.title}" para todos os convidados?`
+                                      : `Você deixará de participar de "${stop.title}".`,
+                                    confirmLabel: isCreator
+                                      ? 'Cancelar convite'
+                                      : 'Sair do rolê',
+                                    tone: 'danger',
+                                  });
+                                  if (ok) {
                                     onCancelOrLeaveSharedStop(sharedInvite.id);
                                   }
                                 }}
