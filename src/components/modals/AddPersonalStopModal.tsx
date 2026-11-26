@@ -1,6 +1,12 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Check, MapPin, Plus, Search, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock, MapPin, Plus, Search, Sparkles, X } from 'lucide-react';
+import {
+  findSameAttractionStops,
+  findTimeConflicts,
+  inferShiftFromTimeLabel,
+  validateAndNormalizeTimeInput,
+} from '../../lib/scheduleUtils';
 import { handleImgError } from '../../lib/utils';
 import type { AttractionMeta, ItineraryDay, ItineraryStop, ShiftType } from '../../types';
 import { HoyoDialog } from '../ui/HoyoDialog';
@@ -11,6 +17,7 @@ interface AddPersonalStopModalProps {
   days: ItineraryDay[];
   defaultDate: string;
   attractions: AttractionMeta[];
+  allActiveStops: ItineraryStop[];
   preselectedAttractionId?: string | null;
   onAddStop: (stop: ItineraryStop) => void;
   onOpenNewPlaceModal: (targetDate: string, targetShift: ShiftType) => void;
@@ -24,6 +31,7 @@ export function AddPersonalStopModal({
   days,
   defaultDate,
   attractions,
+  allActiveStops,
   preselectedAttractionId,
   onAddStop,
   onOpenNewPlaceModal,
@@ -61,15 +69,46 @@ export function AddPersonalStopModal({
     [attractions, selectedAttrId]
   );
 
+  const stopsOnSelectedDay = useMemo(
+    () => allActiveStops.filter((s) => s.dayDate === selectedDay),
+    [allActiveStops, selectedDay]
+  );
+
+  const sameAttractionWarnings = useMemo(() => {
+    if (!selectedAttr) return [];
+    return findSameAttractionStops(selectedAttr.id, selectedAttr.name, allActiveStops);
+  }, [selectedAttr, allActiveStops]);
+
+  const timeValidation = useMemo(
+    () => validateAndNormalizeTimeInput(timeLabel),
+    [timeLabel]
+  );
+
+  const timeConflictWarnings = useMemo(
+    () =>
+      timeValidation.valid
+        ? findTimeConflicts(timeValidation.normalizedLabel, shift, stopsOnSelectedDay)
+        : [],
+    [timeValidation, shift, stopsOnSelectedDay]
+  );
+
+  const hasWarnings =
+    sameAttractionWarnings.length > 0 || timeConflictWarnings.length > 0;
+
+  const formatDayShort = (date: string) => {
+    const found = days.find((d) => d.date === date);
+    return found ? `${found.shortLabel} (${found.weekday})` : date;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAttr) return;
+    if (!selectedAttr || !timeValidation.valid) return;
 
     const created: ItineraryStop = {
       id: 'stop_personal_' + Date.now().toString(36),
       dayDate: selectedDay,
       shift,
-      timeLabel: timeLabel.trim() || 'Horário flexível',
+      timeLabel: timeValidation.normalizedLabel,
       title: selectedAttr.name,
       subtitle: `${selectedAttr.category} • ${selectedAttr.region}`,
       attractionId: selectedAttr.id,
@@ -227,10 +266,32 @@ export function AddPersonalStopModal({
               <input
                 type="text"
                 value={timeLabel}
-                onChange={(e) => setTimeLabel(e.target.value)}
-                placeholder="Ex: 15h30"
-                className="w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#657EF8]"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTimeLabel(val);
+                  const inferred = inferShiftFromTimeLabel(val);
+                  if (inferred) setShift(inferred);
+                }}
+                placeholder="Ex: 13, 15h30 ou 13h–15h"
+                className={`w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white focus:outline-none ${
+                  !timeValidation.valid
+                    ? 'border-[#EC6B6B] focus:border-[#EC6B6B]'
+                    : 'focus:border-[#657EF8]'
+                }`}
               />
+              {!timeValidation.valid ? (
+                <p className="text-[10px] text-[#FFB4B4] mt-1 font-medium">
+                  {timeValidation.error}
+                </p>
+              ) : (
+                timeLabel.trim() &&
+                timeValidation.hasExplicitTime &&
+                timeValidation.normalizedLabel !== timeLabel.trim() && (
+                  <p className="text-[10px] text-[#8AE5DB] mt-1">
+                    Será salvo como <strong>{timeValidation.normalizedLabel}</strong>
+                  </p>
+                )
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="block text-[11px] font-bold text-[#CBD2EC] mb-1">
@@ -246,13 +307,56 @@ export function AddPersonalStopModal({
             </div>
           </div>
 
+          {sameAttractionWarnings.length > 0 && (
+            <div className="rounded-2xl bg-[#E5B869]/12 border border-[#E5B869]/45 p-3 text-xs text-[#FCE7BE] space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-[#F6D794]">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                Esta atração já está no roteiro!
+              </p>
+              <ul className="space-y-0.5 text-[11px] text-[#FCE7BE]/90 pl-5 list-disc">
+                {sameAttractionWarnings.map((match) => (
+                  <li key={match.id}>
+                    <strong>{formatDayShort(match.dayDate)}</strong>
+                    {match.dayDate === selectedDay ? ' (este mesmo dia)' : ''} •{' '}
+                    {match.timeLabel} — {match.title}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-[#F6D794]/90 pt-0.5">
+                Tem certeza que quer adicionar mesmo assim?
+              </p>
+            </div>
+          )}
+
+          {timeConflictWarnings.length > 0 && (
+            <div className="rounded-2xl bg-[#EC6B6B]/14 border border-[#EC6B6B]/45 p-3 text-xs text-[#FFD0D0] space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-[#FFB4B4]">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                Horário conflitante em {formatDayShort(selectedDay)}!
+              </p>
+              <ul className="space-y-0.5 text-[11px] text-[#FFD0D0]/90 pl-5 list-disc">
+                {timeConflictWarnings.map((conflict) => (
+                  <li key={conflict.id}>
+                    <strong>{conflict.timeLabel}</strong> — {conflict.title}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={!selectedAttr}
-            className="w-full hoyo-accent-btn disabled:opacity-45 disabled:cursor-not-allowed font-extrabold text-xs py-3.5 rounded-xl inline-flex items-center justify-center gap-1.5 transition shadow-lg"
+            disabled={!selectedAttr || !timeValidation.valid}
+            className={`w-full disabled:opacity-45 disabled:cursor-not-allowed font-extrabold text-xs py-3.5 rounded-xl inline-flex items-center justify-center gap-1.5 transition shadow-lg ${
+              hasWarnings
+                ? 'bg-[#E5B869] hover:bg-[#f0c77c] text-[#14192D]'
+                : 'hoyo-accent-btn'
+            }`}
           >
             <Plus className="w-4 h-4" />
-            <span>Adicionar ao meu roteiro</span>
+            <span>
+              {hasWarnings ? 'Adicionar mesmo assim' : 'Adicionar ao meu roteiro'}
+            </span>
           </button>
         </form>
       </div>

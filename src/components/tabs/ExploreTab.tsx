@@ -1,5 +1,5 @@
 import type React from 'react';
-import { CalendarPlus, Plus, Search, Star, Trash2 } from 'lucide-react';
+import { CalendarPlus, Plus, Search, Star } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 import { AnimeHeartIcon, CornerOrnaments, StarSparkleIcon } from '../ui/AnimeDecor';
@@ -27,11 +27,9 @@ interface ExploreTabProps {
   userProfiles: Record<string, string>;
   peoplePerCar: number;
   compactCards: boolean;
-  isAdminAuthenticated: boolean;
   onOpenAddPlace: () => void;
   onTogglePlaceLike: (e: React.MouseEvent, attractionId: string) => void;
   onAddToPersonalRoute: (attractionId: string) => void;
-  onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
   onSelectAttraction: (attr: AttractionMeta) => void;
 }
 
@@ -56,11 +54,9 @@ export function ExploreTab({
   userProfiles,
   peoplePerCar,
   compactCards,
-  isAdminAuthenticated,
   onOpenAddPlace,
   onTogglePlaceLike,
   onAddToPersonalRoute,
-  onDeletePlaceAsAdmin,
   onSelectAttraction,
 }: ExploreTabProps) {
   const normalizedMe = voterName.trim().toLowerCase();
@@ -320,26 +316,6 @@ export function ExploreTab({
                       <CalendarPlus className="w-3 h-3" />
                       <span>+ Roteiro</span>
                     </button>
-
-                    {isAdminAuthenticated && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (
-                            window.confirm(
-                              `Remover "${attr.name}" do Explorar para todo o grupo?`
-                            )
-                          ) {
-                            onDeletePlaceAsAdmin(attr);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-[#EC6B6B]/18 border border-[#EC6B6B]/40 text-[#FFD0D0] hover:bg-[#EC6B6B]/30 transition"
-                        title="Remover lugar (somente Admin)"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
 
                     <span className="text-[#8CA0FF] font-semibold">Ficha →</span>
                   </div>

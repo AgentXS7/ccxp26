@@ -1,5 +1,5 @@
 import type React from 'react';
-import { CalendarPlus, ExternalLink, MapPin, Star, Trash2, X } from 'lucide-react';
+import { CalendarPlus, ExternalLink, MapPin, Star, X } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 import { AnimeHeartIcon } from '../ui/AnimeDecor';
@@ -14,10 +14,8 @@ interface AttractionDrawerProps {
   avatarPhoto?: string;
   userProfiles: Record<string, string>;
   peoplePerCar: number;
-  isAdminAuthenticated: boolean;
   onTogglePlaceLike: (e: React.MouseEvent, attractionId: string) => void;
   onAddToPersonalRoute: (attractionId: string) => void;
-  onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
 }
 
 export function AttractionDrawer({
@@ -28,10 +26,8 @@ export function AttractionDrawer({
   avatarPhoto,
   userProfiles,
   peoplePerCar,
-  isAdminAuthenticated,
   onTogglePlaceLike,
   onAddToPersonalRoute,
-  onDeletePlaceAsAdmin,
 }: AttractionDrawerProps) {
   const normalizedMe = voterName.trim().toLowerCase();
   const getPhoto = (name: string) => {
@@ -210,27 +206,6 @@ export function AttractionDrawer({
               >
                 {attraction.instagram}
               </a>
-            )}
-
-            {isAdminAuthenticated && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Remover "${attraction.name}" do Explorar para todo o grupo?`
-                    )
-                  ) {
-                    onDeletePlaceAsAdmin(attraction);
-                    onClose();
-                  }
-                }}
-                className="inline-flex items-center justify-center gap-1.5 bg-[#EC6B6B]/18 hover:bg-[#EC6B6B]/30 border border-[#EC6B6B]/45 text-[#FFD0D0] font-bold text-xs py-3 px-3.5 rounded-xl transition"
-                title="Remover lugar (Admin)"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Remover</span>
-              </button>
             )}
           </div>
         </div>

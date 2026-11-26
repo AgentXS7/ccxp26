@@ -33,7 +33,15 @@ import type {
 import { AnimeDislikeIcon, AnimeHeartIcon, AnimeLikeIcon } from '../ui/AnimeDecor';
 import { UserAvatar } from '../ui/UserAvatar';
 
-export type AdminSectionKey = 'rsvps' | 'custos' | 'reservas' | 'roteiro' | 'supabase';
+import { AdminLugaresSection } from './AdminLugaresSection';
+
+export type AdminSectionKey =
+  | 'rsvps'
+  | 'custos'
+  | 'reservas'
+  | 'roteiro'
+  | 'lugares'
+  | 'supabase';
 
 interface AdminTabProps {
   config: TripConfig;
@@ -101,6 +109,7 @@ interface AdminTabProps {
   onAdminLogin: (e: React.FormEvent) => void;
   onAddStop: (e: React.FormEvent) => void;
   onAddBudgetItem: (e: React.FormEvent) => void;
+  onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
   onPushAllLocalToCloud: () => void;
   onSyncNow: () => void;
   showToast: (msg: string, type?: 'success' | 'info') => void;
@@ -144,6 +153,7 @@ export function AdminTab({
   onAdminLogin,
   onAddStop,
   onAddBudgetItem,
+  onDeletePlaceAsAdmin,
   onPushAllLocalToCloud,
   onSyncNow,
   showToast,
@@ -234,6 +244,10 @@ export function AdminTab({
             },
             { key: 'custos', label: 'Tabela de Valores' },
             { key: 'roteiro', label: 'Paradas do Roteiro' },
+            {
+              key: 'lugares',
+              label: `Lugares Explorar (${attractions.filter((a) => !a.excludedReason).length})`,
+            },
             { key: 'supabase', label: 'Config & Nuvem' },
           ] as const
         ).map((sub) => (
@@ -826,6 +840,15 @@ export function AdminTab({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ADMIN 4B: LUGARES DO EXPLORAR */}
+      {adminSection === 'lugares' && (
+        <AdminLugaresSection
+          attractions={attractions}
+          isAdminAuthenticated={isAdminAuthenticated}
+          onDeletePlaceAsAdmin={onDeletePlaceAsAdmin}
+        />
       )}
 
       {/* ADMIN 5: SUPABASE & VERCEL */}

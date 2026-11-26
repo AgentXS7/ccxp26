@@ -1,10 +1,11 @@
 import type React from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ChevronRight,
   Clock,
+  Eye,
   EyeOff,
-  Lock,
   MapPin,
   Navigation,
   Plus,
@@ -13,6 +14,7 @@ import {
   Train,
   Trash2,
 } from 'lucide-react';
+import { findTimeConflicts } from '../../lib/scheduleUtils';
 import { handleImgError } from '../../lib/utils';
 import type {
   AttractionMeta,
@@ -41,19 +43,21 @@ interface ItineraryTabProps {
   shiftFilter: 'Todos' | ShiftType;
   setShiftFilter: (shift: 'Todos' | ShiftType) => void;
   dayStops: ItineraryStop[];
+  allDayStops: ItineraryStop[];
   attractions: AttractionMeta[];
   stopVotes: StopVoteEntry[];
   voterName: string;
   avatarPhoto?: string;
   userProfiles: Record<string, string>;
   compactCards: boolean;
-  hiddenOfficialCount: number;
+  hiddenOfficialStops: ItineraryStop[];
   onOpenVoterModal: () => void;
   onVoteClick: (e: React.MouseEvent, stopId: string, choice: 'yes' | 'no') => void;
   onSelectAttraction: (attr: AttractionMeta) => void;
   onOpenAddPersonalStop: () => void;
   onHideOfficialStop: (stopId: string) => void;
   onRemovePersonalStop: (stopId: string) => void;
+  onRestoreSingleOfficialStop: (stopId: string) => void;
   onRestoreOfficialStops: () => void;
 }
 
@@ -78,21 +82,35 @@ export function ItineraryTab({
   shiftFilter,
   setShiftFilter,
   dayStops,
+  allDayStops,
   attractions,
   stopVotes,
   voterName,
   avatarPhoto,
   userProfiles,
   compactCards,
-  hiddenOfficialCount,
+  hiddenOfficialStops,
   onOpenVoterModal,
   onVoteClick,
   onSelectAttraction,
   onOpenAddPersonalStop,
   onHideOfficialStop,
   onRemovePersonalStop,
+  onRestoreSingleOfficialStop,
   onRestoreOfficialStops,
 }: ItineraryTabProps) {
+  const [showHiddenDrawer, setShowHiddenDrawer] = useState(false);
+
+  useEffect(() => {
+    setShowHiddenDrawer(false);
+  }, [currentDay.date]);
+
+  useEffect(() => {
+    if (hiddenOfficialStops.length === 0) {
+      setShowHiddenDrawer(false);
+    }
+  }, [hiddenOfficialStops.length]);
+
   const normalizedMe = voterName.trim().toLowerCase();
   const getPhoto = (name: string) => {
     const k = name.trim().toLowerCase();
@@ -276,14 +294,18 @@ export function ItineraryTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            {hiddenOfficialCount > 0 && (
+            {hiddenOfficialStops.length > 0 && (
               <button
                 type="button"
-                onClick={onRestoreOfficialStops}
-                className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl bg-[#1C223B] border border-[#8596D6]/30 text-[#CAD4FF] hover:text-white transition"
+                onClick={() => setShowHiddenDrawer((v) => !v)}
+                className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition ${
+                  showHiddenDrawer
+                    ? 'bg-[#657EF8]/25 border-[#657EF8]/60 text-white'
+                    : 'bg-[#1C223B] border-[#8596D6]/30 text-[#CAD4FF] hover:text-white'
+                }`}
               >
-                <RotateCcw className="w-3 h-3" />
-                <span>Restaurar {hiddenOfficialCount} do grupo</span>
+                <EyeOff className="w-3 h-3" />
+                <span>Ocultas ({hiddenOfficialStops.length})</span>
               </button>
             )}
             <button
@@ -297,6 +319,51 @@ export function ItineraryTab({
           </div>
         </div>
       </div>
+
+      {/* Painel recolhível de paradas ocultadas no meu roteiro */}
+      {showHiddenDrawer && hiddenOfficialStops.length > 0 && (
+        <div className="rounded-2xl hoyo-card p-3.5 sm:p-4 space-y-2.5 border-[#8596D6]/30">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-bold text-[#CBD2EC]">
+              Paradas do grupo ocultas só no seu roteiro ({hiddenOfficialStops.length})
+            </span>
+            <button
+              type="button"
+              onClick={onRestoreOfficialStops}
+              className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#212847] border border-[#8596D6]/35 text-[#CAD4FF] hover:text-white transition"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Restaurar todas</span>
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            {hiddenOfficialStops.map((hStop) => (
+              <div
+                key={hStop.id}
+                className="rounded-xl hoyo-card-inner px-3 py-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-[#8CA0FF] mr-2">
+                    {hStop.timeLabel}
+                  </span>
+                  <span className="text-xs font-semibold text-white truncate">
+                    {hStop.title}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRestoreSingleOfficialStop(hStop.id)}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#47C5B8]/15 border border-[#47C5B8]/40 text-[#8AE5DB] hover:bg-[#47C5B8]/25 transition shrink-0"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Mostrar</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Cards das Paradas do Dia */}
       <div className="space-y-3">
@@ -321,6 +388,14 @@ export function ItineraryTab({
               ? votesForStop.find((v) => v.voterName.trim().toLowerCase() === normalizedMe)
               : undefined;
 
+            const cardConflicts = stop.isPersonal
+              ? findTimeConflicts(
+                  stop.timeLabel,
+                  stop.shift,
+                  allDayStops.filter((other) => other.id !== stop.id)
+                )
+              : [];
+
             return (
               <div key={stop.id} className="space-y-2">
                 <div
@@ -328,7 +403,9 @@ export function ItineraryTab({
                   className={`rounded-2xl hoyo-card overflow-hidden transition ${
                     linkedAttr ? 'cursor-pointer hover:border-[#E5B869]/50' : ''
                   } ${
-                    stop.isPersonal
+                    cardConflicts.length > 0
+                      ? 'border-[#EC6B6B]/55'
+                      : stop.isPersonal
                       ? 'border-[#657EF8]/45'
                       : stop.isMandatory
                       ? 'border-[#E5B869]/30'
@@ -362,18 +439,22 @@ export function ItineraryTab({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {stop.isMandatory && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E5B869]/15 text-[#F6D794] border border-[#E5B869]/35">
-                              <Lock className="w-2.5 h-2.5" /> Fixo do grupo
-                            </span>
-                          )}
                           {stop.isPersonal && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full hoyo-accent-pill border">
                               Meu roteiro
                             </span>
                           )}
+                          {cardConflicts.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EC6B6B]/18 text-[#FFB4B4] border border-[#EC6B6B]/45">
+                              <AlertTriangle className="w-2.5 h-2.5" /> Conflito
+                            </span>
+                          )}
                           {stop.tags
-                            .filter((t) => t !== 'Meu roteiro')
+                            .filter(
+                              (t) =>
+                                t !== 'Meu roteiro' &&
+                                !t.toLowerCase().includes('obrigat')
+                            )
                             .map((tag) => (
                               <span
                                 key={tag}
@@ -417,7 +498,7 @@ export function ItineraryTab({
                               <Trash2 className="w-3.5 h-3.5" />
                               <span className="hidden sm:inline">Remover</span>
                             </button>
-                          ) : !stop.isMandatory ? (
+                          ) : (
                             <button
                               type="button"
                               onClick={() => onHideOfficialStop(stop.id)}
@@ -427,7 +508,7 @@ export function ItineraryTab({
                               <EyeOff className="w-3.5 h-3.5" />
                               <span className="hidden sm:inline">Ocultar</span>
                             </button>
-                          ) : null}
+                          )}
 
                           {linkedAttr && (
                             <button
@@ -444,6 +525,25 @@ export function ItineraryTab({
                       <p className="text-xs sm:text-sm text-[#CBD2EC] mt-2.5 leading-relaxed">
                         {stop.details}
                       </p>
+
+                      {cardConflicts.length > 0 && (
+                        <div className="mt-3 rounded-xl bg-[#EC6B6B]/12 border border-[#EC6B6B]/40 p-3 text-xs text-[#FFD0D0] space-y-1">
+                          <p className="font-bold flex items-center gap-1.5 text-[#FFB4B4]">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            Horário conflitante neste dia:
+                          </p>
+                          <ul className="space-y-0.5 text-[11px] text-[#FFD0D0]/90 pl-5 list-disc">
+                            {cardConflicts.map((c) => (
+                              <li key={c.id}>
+                                <strong>{c.timeLabel}</strong> — {c.title}
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-[11px] text-[#FFB4B4]/90 pt-0.5">
+                            Dica: se não for à outra parada, clique no olhinho dela para ocultar do seu roteiro e liberar este horário.
+                          </p>
+                        </div>
+                      )}
 
                       {stop.transitTip && (
                         <div className="mt-3 flex items-center gap-2 text-xs text-[#8AE5DB] bg-[#47C5B8]/10 border border-[#47C5B8]/25 px-3 py-2 rounded-xl">

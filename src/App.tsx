@@ -15,6 +15,7 @@ import { usePersistedState } from './hooks/usePersistedState';
 import { usePwa } from './hooks/usePwa';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 
+import { compareStopsChronologically } from './lib/scheduleUtils';
 import { buildShareableUrl, isLocalOrPreviewUrl } from './lib/sharing';
 import { STORAGE_KEYS } from './lib/storage';
 import { readInitialSupabaseConfig } from './lib/supabase';
@@ -949,29 +950,28 @@ export default function App() {
     [days, selectedDate]
   );
 
-  const dayStops = useMemo(() => {
-    const shiftOrder: Record<ShiftType, number> = {
-      'Manhã e Almoço': 0,
-      Tarde: 1,
-      'Noite e Madrugada': 2,
-    };
+  const allActiveStops = useMemo(() => {
     const hiddenSet = new Set(personalItinerary.hiddenStopIds);
-    const officialForDay = stops.filter(
-      (s) => s.dayDate === currentDay.date && (s.isMandatory || !hiddenSet.has(s.id))
-    );
-    const personalForDay = personalItinerary.addedStops.filter(
-      (s) => s.dayDate === currentDay.date
-    );
-    return [...officialForDay, ...personalForDay]
-      .filter((s) => shiftFilter === 'Todos' || s.shift === shiftFilter)
-      .sort((a, b) => shiftOrder[a.shift] - shiftOrder[b.shift]);
-  }, [stops, personalItinerary, currentDay.date, shiftFilter]);
+    const official = stops.filter((s) => !hiddenSet.has(s.id));
+    return [...official, ...personalItinerary.addedStops];
+  }, [stops, personalItinerary]);
 
-  const hiddenOfficialCount = useMemo(() => {
+  const allDayStops = useMemo(() => {
+    return allActiveStops
+      .filter((s) => s.dayDate === currentDay.date)
+      .sort(compareStopsChronologically);
+  }, [allActiveStops, currentDay.date]);
+
+  const dayStops = useMemo(() => {
+    if (shiftFilter === 'Todos') return allDayStops;
+    return allDayStops.filter((s) => s.shift === shiftFilter);
+  }, [allDayStops, shiftFilter]);
+
+  const hiddenOfficialStops = useMemo(() => {
     const hiddenSet = new Set(personalItinerary.hiddenStopIds);
-    return stops.filter(
-      (s) => s.dayDate === currentDay.date && !s.isMandatory && hiddenSet.has(s.id)
-    ).length;
+    return stops
+      .filter((s) => s.dayDate === currentDay.date && hiddenSet.has(s.id))
+      .sort(compareStopsChronologically);
   }, [stops, personalItinerary.hiddenStopIds, currentDay.date]);
 
   const [personalStopModal, setPersonalStopModal] = useState<{
@@ -1005,6 +1005,14 @@ export default function App() {
     showToast('Parada removida do seu roteiro.', 'info');
   };
 
+  const handleRestoreSingleOfficialStop = (stopId: string) => {
+    setPersonalItinerary((prev) => ({
+      ...prev,
+      hiddenStopIds: prev.hiddenStopIds.filter((id) => id !== stopId),
+    }));
+    showToast('Parada restaurada no seu roteiro!');
+  };
+
   const handleRestoreOfficialStops = () => {
     const idsOfDay = new Set(
       stops.filter((s) => s.dayDate === currentDay.date).map((s) => s.id)
@@ -1013,7 +1021,7 @@ export default function App() {
       ...prev,
       hiddenStopIds: prev.hiddenStopIds.filter((id) => !idsOfDay.has(id)),
     }));
-    showToast('Paradas opcionais do grupo restauradas neste dia!');
+    showToast('Paradas do grupo restauradas neste dia!');
   };
 
   const handleDeletePlaceAsAdmin = async (attr: AttractionMeta) => {
@@ -1352,13 +1360,14 @@ export default function App() {
             shiftFilter={shiftFilter}
             setShiftFilter={setShiftFilter}
             dayStops={dayStops}
+            allDayStops={allDayStops}
             attractions={attractions}
             stopVotes={stopVotes}
             voterName={effectiveVoterName}
             avatarPhoto={userPrefs.avatarPhoto}
             userProfiles={userProfiles}
             compactCards={userPrefs.compactCards}
-            hiddenOfficialCount={hiddenOfficialCount}
+            hiddenOfficialStops={hiddenOfficialStops}
             onOpenVoterModal={openVoterModal}
             onVoteClick={handleVoteClick}
             onSelectAttraction={setSelectedAttraction}
@@ -1367,6 +1376,7 @@ export default function App() {
             }
             onHideOfficialStop={handleHideOfficialStop}
             onRemovePersonalStop={handleRemovePersonalStop}
+            onRestoreSingleOfficialStop={handleRestoreSingleOfficialStop}
             onRestoreOfficialStops={handleRestoreOfficialStops}
           />
         )}
@@ -1393,7 +1403,6 @@ export default function App() {
             userProfiles={userProfiles}
             peoplePerCar={peoplePerCar}
             compactCards={userPrefs.compactCards}
-            isAdminAuthenticated={isAdminAuthenticated}
             onOpenAddPlace={() => {
               setNewPlaceForm((prev) => ({
                 ...prev,
@@ -1405,7 +1414,6 @@ export default function App() {
             onAddToPersonalRoute={(attrId) =>
               setPersonalStopModal({ open: true, attractionId: attrId })
             }
-            onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
             onSelectAttraction={setSelectedAttraction}
           />
         )}
@@ -1466,6 +1474,7 @@ export default function App() {
             onAdminLogin={handleAdminLogin}
             onAddStop={handleAddStop}
             onAddBudgetItem={handleAddBudgetItem}
+            onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
             onPushAllLocalToCloud={pushAllLocalToCloud}
             onSyncNow={() => {
               syncFromCloud(false);
@@ -1512,6 +1521,7 @@ export default function App() {
         days={days}
         defaultDate={currentDay.date}
         attractions={attractions}
+        allActiveStops={allActiveStops}
         preselectedAttractionId={personalStopModal.attractionId}
         onAddStop={handleAddPersonalStop}
         onOpenNewPlaceModal={(targetDate, targetShift) => {
@@ -1563,12 +1573,10 @@ export default function App() {
         avatarPhoto={userPrefs.avatarPhoto}
         userProfiles={userProfiles}
         peoplePerCar={peoplePerCar}
-        isAdminAuthenticated={isAdminAuthenticated}
         onTogglePlaceLike={handleTogglePlaceLike}
         onAddToPersonalRoute={(attrId) =>
           setPersonalStopModal({ open: true, attractionId: attrId })
         }
-        onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
       />
     </div>
   );
