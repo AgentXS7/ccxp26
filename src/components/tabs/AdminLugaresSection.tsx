@@ -51,7 +51,7 @@ export function AdminLugaresSection({
         <div className="rounded-2xl hoyo-card-inner p-3.5 text-xs text-[#9BA3C2] flex items-center gap-2.5">
           <Lock className="w-4 h-4 text-[#E5B869] shrink-0" />
           <span>
-            Digite o PIN do organizador (<strong className="text-white">2026</strong>) no topo desta aba para liberar a exclusão de lugares.
+            Digite o PIN do organizador no topo desta aba para liberar a exclusão de lugares.
           </span>
         </div>
       )}

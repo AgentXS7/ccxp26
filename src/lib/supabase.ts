@@ -1,37 +1,9 @@
-import { decodeBase64Safe, readEnvVar } from './utils';
+import { readEnvVar } from './utils';
 
 export function readInitialSupabaseConfig(): { url: string; key: string } {
-  let url = readEnvVar('VITE_SUPABASE_URL') || readEnvVar('NEXT_PUBLIC_SUPABASE_URL');
-  let key = readEnvVar('VITE_SUPABASE_ANON_KEY') || readEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  try {
-    if (typeof window !== 'undefined' && window.location) {
-      const searchParams = new URLSearchParams(window.location.search);
-      const hashStr = window.location.hash.includes('?')
-        ? window.location.hash.split('?')[1]
-        : window.location.hash.replace(/^#/, '');
-      const hashParams = new URLSearchParams(hashStr);
-
-      // Suporta formato compacto (?sb=base64) ou explícito (?sb_url=...&sb_key=...)
-      const packed = searchParams.get('sb') || hashParams.get('sb');
-      if (packed) {
-        const decoded = decodeBase64Safe(packed);
-        const parsed = JSON.parse(decoded);
-        if (parsed?.u && parsed?.k) {
-          return { url: String(parsed.u).trim(), key: String(parsed.k).trim() };
-        }
-      }
-
-      const qUrl = searchParams.get('sb_url') || hashParams.get('sb_url');
-      const qKey = searchParams.get('sb_key') || hashParams.get('sb_key');
-      if (qUrl && qKey) {
-        url = qUrl.trim();
-        key = qKey.trim();
-      }
-    }
-  } catch {
-    // Ignora
-  }
-  return { url, key };
+  const url = readEnvVar('VITE_SUPABASE_URL') || readEnvVar('NEXT_PUBLIC_SUPABASE_URL');
+  const key = readEnvVar('VITE_SUPABASE_ANON_KEY') || readEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  return { url: url.trim(), key: key.trim() };
 }
 
 export async function sbFetch(

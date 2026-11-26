@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   Car,
   Check,
+  Lock,
   Pencil,
   Plus,
   RotateCcw,
@@ -42,6 +43,8 @@ interface CostsTabProps {
   budgetItems: BudgetItem[];
   personalBudget: PersonalBudgetState;
   setPersonalBudget: React.Dispatch<React.SetStateAction<PersonalBudgetState>>;
+  canEdit: boolean;
+  onRequireAuth: () => void;
   showToast: (message: string, type?: 'success' | 'info') => void;
 }
 
@@ -66,6 +69,8 @@ export function CostsTab({
   budgetItems,
   personalBudget,
   setPersonalBudget,
+  canEdit,
+  onRequireAuth,
   showToast,
 }: CostsTabProps) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -127,6 +132,10 @@ export function CostsTab({
   };
 
   const startEditingAmount = (id: string, currentAmount: number | null) => {
+    if (!canEdit) {
+      onRequireAuth();
+      return;
+    }
     setEditingItemId(id);
     setEditingValue(currentAmount !== null ? String(currentAmount) : '');
   };
@@ -246,6 +255,24 @@ export function CostsTab({
 
   return (
     <div className="space-y-5">
+      {!canEdit && (
+        <div className="rounded-2xl bg-[#E5B869]/12 border border-[#E5B869]/40 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#FCE7BE]">
+          <span className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-[#E5B869] shrink-0" />
+            <span>
+              Modo somente leitura — selecione seu perfil do grupo no topo para personalizar ou adicionar custos.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={onRequireAuth}
+            className="text-xs font-extrabold px-3 py-1.5 rounded-xl hoyo-accent-btn shrink-0"
+          >
+            Entrar no perfil
+          </button>
+        </div>
+      )}
+
       {/* Painel Principal do Controle de Gastos Pessoal */}
       <div className="relative rounded-3xl hoyo-card hoyo-gold-hairline hoyo-shimmer-top p-5 sm:p-6 space-y-5">
         <CornerOrnaments />
@@ -294,11 +321,23 @@ export function CostsTab({
           <div className="flex flex-col sm:items-end gap-2">
             <button
               type="button"
-              onClick={() => setShowAddForm((v) => !v)}
+              onClick={() => {
+                if (!canEdit) {
+                  onRequireAuth();
+                  return;
+                }
+                setShowAddForm((v) => !v);
+              }}
               className="inline-flex items-center justify-center gap-1.5 hoyo-accent-btn text-xs font-extrabold px-4 py-2.5 rounded-2xl shadow-lg transition active:scale-[0.98]"
             >
-              {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              <span>{showAddForm ? 'Fechar formulário' : '+ Custo extra'}</span>
+              {!canEdit ? (
+                <Lock className="w-4 h-4" />
+              ) : showAddForm ? (
+                <X className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+              <span>{showAddForm && canEdit ? 'Fechar formulário' : '+ Custo extra'}</span>
             </button>
 
             <div className="flex flex-wrap items-center gap-2">

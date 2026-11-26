@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { INITIAL_ATTRACTIONS } from '../data/attractions';
+import { generateTransferCode } from '../data/members';
 import { sbFetch } from '../lib/supabase';
 import { packDeviceTokenWithBadge, slugifyName, unpackDeviceToken } from '../lib/utils';
 import type {
@@ -518,11 +519,12 @@ export function useSupabaseSync({
       const updated: MemberCloudProfile = {
         ...existing,
         trustedDevices: [],
+        transferCode: generateTransferCode(),
         updatedAt: new Date().toISOString(),
       };
       await upsertMemberProfile(updated);
       showToastRef.current(
-        `Aparelho de ${existing.name} liberado! Dados, foto e gastos foram preservados.`
+        `Aparelho de ${existing.name} liberado (novo código gerado)! Dados, foto e gastos foram preservados.`
       );
     },
     [memberProfiles, upsertMemberProfile]

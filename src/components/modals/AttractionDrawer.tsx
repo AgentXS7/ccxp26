@@ -1,5 +1,5 @@
 import type React from 'react';
-import { CalendarPlus, ExternalLink, MapPin, Star, X } from 'lucide-react';
+import { CalendarPlus, ExternalLink, Lock, MapPin, Star, X } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 import { AnimeHeartIcon } from '../ui/AnimeDecor';
@@ -14,6 +14,7 @@ interface AttractionDrawerProps {
   avatarPhoto?: string;
   userProfiles: Record<string, string>;
   peoplePerCar: number;
+  canEdit: boolean;
   onTogglePlaceLike: (e: React.MouseEvent, attractionId: string) => void;
   onAddToPersonalRoute: (attractionId: string) => void;
 }
@@ -26,6 +27,7 @@ export function AttractionDrawer({
   avatarPhoto,
   userProfiles,
   peoplePerCar,
+  canEdit,
   onTogglePlaceLike,
   onAddToPersonalRoute,
 }: AttractionDrawerProps) {
@@ -183,7 +185,11 @@ export function AttractionDrawer({
               }}
               className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-1.5 hoyo-accent-pill border font-extrabold text-xs py-3 px-3 rounded-xl transition hover:border-[#E5B869]/60"
             >
-              <CalendarPlus className="w-4 h-4" />
+              {canEdit ? (
+                <CalendarPlus className="w-4 h-4" />
+              ) : (
+                <Lock className="w-4 h-4" />
+              )}
               <span>+ Meu Roteiro</span>
             </button>
 

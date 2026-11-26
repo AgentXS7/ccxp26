@@ -19,7 +19,7 @@ export const INITIAL_CONFIG: TripConfig = {
   arrivalWindowNote:
     'Pouso em GRU às 23h50 do dia 03/12. Check-in oficial do Airbnb liberado em 04/12 às 15h — definir pernoite ou guarda-malas da 1ª noite aqui.',
   airbnbTotalCost: null,
-  adminPin: '2026',
+  adminPin: readEnvVar('VITE_ADMIN_PIN') || '2026',
   supabaseUrl: readEnvVar('VITE_SUPABASE_URL'),
   supabaseAnonKey: readEnvVar('VITE_SUPABASE_ANON_KEY'),
 };

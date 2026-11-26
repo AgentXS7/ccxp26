@@ -6,6 +6,7 @@ import {
   Clock,
   Eye,
   EyeOff,
+  Lock,
   MapPin,
   Navigation,
   Plus,
@@ -50,6 +51,7 @@ interface ItineraryTabProps {
   avatarPhoto?: string;
   userProfiles: Record<string, string>;
   compactCards: boolean;
+  canEdit: boolean;
   hiddenOfficialStops: ItineraryStop[];
   onOpenVoterModal: () => void;
   onVoteClick: (e: React.MouseEvent, stopId: string, choice: 'yes' | 'no') => void;
@@ -89,6 +91,7 @@ export function ItineraryTab({
   avatarPhoto,
   userProfiles,
   compactCards,
+  canEdit,
   hiddenOfficialStops,
   onOpenVoterModal,
   onVoteClick,
@@ -313,7 +316,7 @@ export function ItineraryTab({
               onClick={onOpenAddPersonalStop}
               className="inline-flex items-center gap-1 text-xs font-extrabold px-3 py-1.5 rounded-xl hoyo-accent-btn shadow transition"
             >
-              <Plus className="w-3.5 h-3.5" />
+              {canEdit ? <Plus className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
               <span>Adicionar ao meu dia</span>
             </button>
           </div>
@@ -488,27 +491,28 @@ export function ItineraryTab({
                           className="flex items-center gap-1.5 shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {stop.isPersonal ? (
-                            <button
-                              type="button"
-                              onClick={() => onRemovePersonalStop(stop.id)}
-                              title="Remover do meu roteiro"
-                              className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1.5 rounded-xl bg-[#EC6B6B]/15 border border-[#EC6B6B]/35 text-[#FFD0D0] hover:bg-[#EC6B6B]/25 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Remover</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => onHideOfficialStop(stop.id)}
-                              title="Ocultar só do meu roteiro (não altera o grupo)"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-[#212847] border border-[#8596D6]/20 text-[#9BA3C2] hover:text-white transition"
-                            >
-                              <EyeOff className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Ocultar</span>
-                            </button>
-                          )}
+                          {canEdit &&
+                            (stop.isPersonal ? (
+                              <button
+                                type="button"
+                                onClick={() => onRemovePersonalStop(stop.id)}
+                                title="Remover do meu roteiro"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1.5 rounded-xl bg-[#EC6B6B]/15 border border-[#EC6B6B]/35 text-[#FFD0D0] hover:bg-[#EC6B6B]/25 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Remover</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onHideOfficialStop(stop.id)}
+                                title="Ocultar só do meu roteiro (não altera o grupo)"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-[#212847] border border-[#8596D6]/20 text-[#9BA3C2] hover:text-white transition"
+                              >
+                                <EyeOff className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Ocultar</span>
+                              </button>
+                            ))}
 
                           {linkedAttr && (
                             <button

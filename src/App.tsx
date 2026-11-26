@@ -122,21 +122,19 @@ export default function App() {
     const envSb = readInitialSupabaseConfig();
     return {
       ...INITIAL_CONFIG,
-      supabaseUrl: envSb.url || INITIAL_CONFIG.supabaseUrl,
-      supabaseAnonKey: envSb.key || INITIAL_CONFIG.supabaseAnonKey,
+      supabaseUrl: envSb.url,
+      supabaseAnonKey: envSb.key,
     };
   });
 
-  // Garante que URL (?sb=...) ou variáveis de ambiente prevaleçam ao abrir link compartilhado
+  // Garante que a conexão com o Supabase venha exclusivamente das variáveis de ambiente do projeto
   useEffect(() => {
     const envSb = readInitialSupabaseConfig();
-    if (envSb.url && envSb.key) {
-      setConfig((prev) =>
-        prev.supabaseUrl === envSb.url && prev.supabaseAnonKey === envSb.key
-          ? prev
-          : { ...prev, supabaseUrl: envSb.url, supabaseAnonKey: envSb.key }
-      );
-    }
+    setConfig((prev) =>
+      prev.supabaseUrl === envSb.url && prev.supabaseAnonKey === envSb.key
+        ? prev
+        : { ...prev, supabaseUrl: envSb.url, supabaseAnonKey: envSb.key }
+    );
   }, [setConfig]);
 
   const [days] = usePersistedState<ItineraryDay[]>(STORAGE_KEYS.DAYS, INITIAL_DAYS);
@@ -205,11 +203,7 @@ export default function App() {
   const activeMemberId: GroupMemberId | null = useMemo(() => {
     if (!activeMemberSpec) return null;
     const cloud = memberProfiles[activeMemberSpec.id];
-    if (
-      cloud &&
-      cloud.trustedDevices.length > 0 &&
-      !cloud.trustedDevices.includes(deviceToken)
-    ) {
+    if (cloud && !cloud.trustedDevices.includes(deviceToken)) {
       return null;
     }
     return activeMemberSpec.id;
@@ -222,7 +216,6 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [adminSection, setAdminSection] = useState<AdminSectionKey>('reservas');
-  const [showSql, setShowSql] = useState(false);
 
   const isHydratingFromCloudRef = useRef(false);
   const lastSyncedMemberTimestampRef = useRef<string>('');
@@ -275,7 +268,6 @@ export default function App() {
     pendingQueueCount,
     cloudFetch,
     syncFromCloud,
-    pushAllLocalToCloud,
     enqueueOfflineOp,
     upsertMemberProfile,
     unlockMemberDevicesAsAdmin,
@@ -310,6 +302,29 @@ export default function App() {
     isAdminAuthenticated,
     showToast,
   });
+
+  const isTrustedMember = useMemo(() => {
+    if (!activeMemberId) return false;
+    const cloud = memberProfiles[activeMemberId];
+    if (hasSupabase) {
+      return Boolean(cloud && cloud.trustedDevices.includes(deviceToken));
+    }
+    return true;
+  }, [activeMemberId, memberProfiles, deviceToken, hasSupabase]);
+
+  const canEdit = isTrustedMember || isAdminAuthenticated;
+
+  useEffect(() => {
+    if (!activeMemberSpec) return;
+    const cloud = memberProfiles[activeMemberSpec.id];
+    if (cloud && !cloud.trustedDevices.includes(deviceToken)) {
+      setVoterName('');
+      showToast(
+        `Acesso de ${activeMemberSpec.name} neste aparelho foi desconectado.`,
+        'info'
+      );
+    }
+  }, [activeMemberSpec, memberProfiles, deviceToken, setVoterName]);
 
   const daysUntilTrip = useMemo(() => {
     const tripStart = new Date('2026-12-03T00:00:00-03:00').getTime();
@@ -518,7 +533,7 @@ export default function App() {
     choice: 'yes' | 'no'
   ) => {
     e.stopPropagation();
-    if (!effectiveVoterName) {
+    if (!isTrustedMember || !effectiveVoterName) {
       setVoterPromptModal({
         open: true,
         pendingStopId: stopId,
@@ -532,7 +547,7 @@ export default function App() {
 
   const handleTogglePlaceLike = (e: React.MouseEvent, attractionId: string) => {
     e.stopPropagation();
-    if (!effectiveVoterName) {
+    if (!isTrustedMember || !effectiveVoterName) {
       setVoterPromptModal({
         open: true,
         pendingStopId: null,
@@ -698,6 +713,23 @@ export default function App() {
     }
   );
 
+  const requireTrustedMember = (actionLabel = 'fazer alterações') => {
+    if (canEdit) return true;
+    showToast(
+      `Entre com um perfil autorizado do grupo (ou Admin) para ${actionLabel}.`,
+      'info'
+    );
+    openVoterModal();
+    return false;
+  };
+
+  const handleGuardedPersonalBudgetChange: React.Dispatch<
+    React.SetStateAction<PersonalBudgetState>
+  > = (updater) => {
+    if (!requireTrustedMember('editar seus custos')) return;
+    setPersonalBudget(updater);
+  };
+
   const financialSummary = useMemo(() => {
     let paidTotal = 0;
 
@@ -820,7 +852,7 @@ export default function App() {
   const lastPushedSnapshotRef = useRef<string>('');
 
   useEffect(() => {
-    if (!activeMemberId || !hasSupabase || isHydratingFromCloudRef.current) return;
+    if (!isTrustedMember || !activeMemberId || !hasSupabase || isHydratingFromCloudRef.current) return;
     const existing = memberProfiles[activeMemberId];
     // Se acabou de hidratar da nuvem, apenas registra o snapshot sem reenviar
     if (
@@ -860,6 +892,7 @@ export default function App() {
 
     return () => window.clearTimeout(timer);
   }, [
+    isTrustedMember,
     activeMemberId,
     hasSupabase,
     memberSyncSnapshot,
@@ -980,6 +1013,7 @@ export default function App() {
   }>({ open: false, attractionId: null });
 
   const handleAddPersonalStop = (newStop: ItineraryStop) => {
+    if (!requireTrustedMember('adicionar ao roteiro')) return;
     setPersonalItinerary((prev) => ({
       ...prev,
       addedStops: [...prev.addedStops, newStop],
@@ -990,6 +1024,7 @@ export default function App() {
   };
 
   const handleHideOfficialStop = (stopId: string) => {
+    if (!requireTrustedMember('ocultar paradas')) return;
     setPersonalItinerary((prev) => ({
       ...prev,
       hiddenStopIds: Array.from(new Set([...prev.hiddenStopIds, stopId])),
@@ -998,6 +1033,7 @@ export default function App() {
   };
 
   const handleRemovePersonalStop = (stopId: string) => {
+    if (!requireTrustedMember('remover paradas')) return;
     setPersonalItinerary((prev) => ({
       ...prev,
       addedStops: prev.addedStops.filter((s) => s.id !== stopId),
@@ -1006,6 +1042,7 @@ export default function App() {
   };
 
   const handleRestoreSingleOfficialStop = (stopId: string) => {
+    if (!requireTrustedMember('restaurar paradas')) return;
     setPersonalItinerary((prev) => ({
       ...prev,
       hiddenStopIds: prev.hiddenStopIds.filter((id) => id !== stopId),
@@ -1014,6 +1051,7 @@ export default function App() {
   };
 
   const handleRestoreOfficialStops = () => {
+    if (!requireTrustedMember('restaurar paradas')) return;
     const idsOfDay = new Set(
       stops.filter((s) => s.dayDate === currentDay.date).map((s) => s.id)
     );
@@ -1025,6 +1063,7 @@ export default function App() {
   };
 
   const handleDeletePlaceAsAdmin = async (attr: AttractionMeta) => {
+    if (!isAdminAuthenticated) return;
     await deletePlaceAsAdmin(attr);
     showToast(`"${attr.name}" removido do Explorar.`, 'info');
   };
@@ -1052,6 +1091,7 @@ export default function App() {
 
   const handleCreateCustomPlace = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireTrustedMember('adicionar um lugar')) return;
     if (!newPlaceForm.name.trim()) return;
     const cleanName = newPlaceForm.name.trim();
     const created: AttractionMeta = {
@@ -1220,6 +1260,7 @@ export default function App() {
 
   const handleAddStop = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdminAuthenticated) return;
     if (!newStopForm.title.trim()) return;
     const created: ItineraryStop = {
       id: 'stop_custom_' + Date.now().toString(36),
@@ -1238,6 +1279,7 @@ export default function App() {
 
   const handleAddBudgetItem = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdminAuthenticated) return;
     if (!newBudgetForm.name.trim()) return;
     const parsed =
       newBudgetForm.amount.trim() === ''
@@ -1287,8 +1329,7 @@ export default function App() {
             syncFromCloud(false);
             showToast('Sincronizando com a nuvem...');
           } else {
-            setActiveTab('admin');
-            setAdminSection('supabase');
+            showToast('Conexão com a nuvem é configurada via ambiente do projeto.', 'info');
           }
         }}
         voterName={effectiveVoterName}
@@ -1311,13 +1352,10 @@ export default function App() {
             </span>
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('admin');
-                setAdminSection('supabase');
-              }}
+              onClick={() => syncFromCloud(false)}
               className="font-bold underline text-white"
             >
-              Corrigir no Admin →
+              Tentar reconectar
             </button>
           </div>
         </div>
@@ -1367,13 +1405,15 @@ export default function App() {
             avatarPhoto={userPrefs.avatarPhoto}
             userProfiles={userProfiles}
             compactCards={userPrefs.compactCards}
+            canEdit={canEdit}
             hiddenOfficialStops={hiddenOfficialStops}
             onOpenVoterModal={openVoterModal}
             onVoteClick={handleVoteClick}
             onSelectAttraction={setSelectedAttraction}
-            onOpenAddPersonalStop={() =>
-              setPersonalStopModal({ open: true, attractionId: null })
-            }
+            onOpenAddPersonalStop={() => {
+              if (!requireTrustedMember('adicionar ao roteiro')) return;
+              setPersonalStopModal({ open: true, attractionId: null });
+            }}
             onHideOfficialStop={handleHideOfficialStop}
             onRemovePersonalStop={handleRemovePersonalStop}
             onRestoreSingleOfficialStop={handleRestoreSingleOfficialStop}
@@ -1403,7 +1443,9 @@ export default function App() {
             userProfiles={userProfiles}
             peoplePerCar={peoplePerCar}
             compactCards={userPrefs.compactCards}
+            canEdit={canEdit}
             onOpenAddPlace={() => {
+              if (!requireTrustedMember('adicionar um lugar')) return;
               setNewPlaceForm((prev) => ({
                 ...prev,
                 targetDayDate: currentDay.date,
@@ -1411,9 +1453,10 @@ export default function App() {
               setAddPlaceModalOpen(true);
             }}
             onTogglePlaceLike={handleTogglePlaceLike}
-            onAddToPersonalRoute={(attrId) =>
-              setPersonalStopModal({ open: true, attractionId: attrId })
-            }
+            onAddToPersonalRoute={(attrId) => {
+              if (!requireTrustedMember('adicionar ao roteiro')) return;
+              setPersonalStopModal({ open: true, attractionId: attrId });
+            }}
             onSelectAttraction={setSelectedAttraction}
           />
         )}
@@ -1430,7 +1473,11 @@ export default function App() {
             transportLegs={transportLegs}
             budgetItems={budgetItems}
             personalBudget={personalBudget}
-            setPersonalBudget={setPersonalBudget}
+            setPersonalBudget={handleGuardedPersonalBudgetChange}
+            canEdit={canEdit}
+            onRequireAuth={() => {
+              requireTrustedMember('editar seus custos');
+            }}
             showToast={showToast}
           />
         )}
@@ -1462,11 +1509,8 @@ export default function App() {
             setPinError={setPinError}
             adminSection={adminSection}
             setAdminSection={setAdminSection}
-            showSql={showSql}
-            setShowSql={setShowSql}
             syncStatus={syncStatus}
             lastSyncedAt={lastSyncedAt}
-            syncErrorDetail={syncErrorDetail}
             newStopForm={newStopForm}
             setNewStopForm={setNewStopForm}
             newBudgetForm={newBudgetForm}
@@ -1475,7 +1519,6 @@ export default function App() {
             onAddStop={handleAddStop}
             onAddBudgetItem={handleAddBudgetItem}
             onDeletePlaceAsAdmin={handleDeletePlaceAsAdmin}
-            onPushAllLocalToCloud={pushAllLocalToCloud}
             onSyncNow={() => {
               syncFromCloud(false);
               showToast('Buscando atualizações do grupo...');
@@ -1525,6 +1568,7 @@ export default function App() {
         preselectedAttractionId={personalStopModal.attractionId}
         onAddStop={handleAddPersonalStop}
         onOpenNewPlaceModal={(targetDate, targetShift) => {
+          if (!requireTrustedMember('adicionar um lugar')) return;
           setNewPlaceForm((prev) => ({
             ...prev,
             addToPersonalRoute: true,
@@ -1573,10 +1617,12 @@ export default function App() {
         avatarPhoto={userPrefs.avatarPhoto}
         userProfiles={userProfiles}
         peoplePerCar={peoplePerCar}
+        canEdit={canEdit}
         onTogglePlaceLike={handleTogglePlaceLike}
-        onAddToPersonalRoute={(attrId) =>
-          setPersonalStopModal({ open: true, attractionId: attrId })
-        }
+        onAddToPersonalRoute={(attrId) => {
+          if (!requireTrustedMember('adicionar ao roteiro')) return;
+          setPersonalStopModal({ open: true, attractionId: attrId });
+        }}
       />
     </div>
   );

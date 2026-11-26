@@ -1,5 +1,5 @@
 import type React from 'react';
-import { CalendarPlus, Plus, Search, Star } from 'lucide-react';
+import { CalendarPlus, Lock, Plus, Search, Star } from 'lucide-react';
 import { formatBRL, handleImgError } from '../../lib/utils';
 import type { AttractionMeta, PlaceLikeEntry } from '../../types';
 import { AnimeHeartIcon, CornerOrnaments, StarSparkleIcon } from '../ui/AnimeDecor';
@@ -27,6 +27,7 @@ interface ExploreTabProps {
   userProfiles: Record<string, string>;
   peoplePerCar: number;
   compactCards: boolean;
+  canEdit: boolean;
   onOpenAddPlace: () => void;
   onTogglePlaceLike: (e: React.MouseEvent, attractionId: string) => void;
   onAddToPersonalRoute: (attractionId: string) => void;
@@ -54,6 +55,7 @@ export function ExploreTab({
   userProfiles,
   peoplePerCar,
   compactCards,
+  canEdit,
   onOpenAddPlace,
   onTogglePlaceLike,
   onAddToPersonalRoute,
@@ -92,7 +94,8 @@ export function ExploreTab({
               onClick={onOpenAddPlace}
               className="inline-flex items-center gap-1.5 hoyo-accent-btn text-xs font-bold px-3.5 py-2 rounded-xl shadow-lg transition"
             >
-              <Plus className="w-4 h-4" /> Adicionar Lugar
+              {canEdit ? <Plus className="w-4 h-4" /> : <Lock className="w-3.5 h-3.5" />}
+              <span>Adicionar Lugar</span>
             </button>
 
             <button
@@ -313,7 +316,11 @@ export function ExploreTab({
                       className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg hoyo-accent-pill border hover:border-[#E5B869]/60 transition"
                       title="Adicionar no seu roteiro pessoal"
                     >
-                      <CalendarPlus className="w-3 h-3" />
+                      {canEdit ? (
+                        <CalendarPlus className="w-3 h-3" />
+                      ) : (
+                        <Lock className="w-3 h-3" />
+                      )}
                       <span>+ Roteiro</span>
                     </button>
 

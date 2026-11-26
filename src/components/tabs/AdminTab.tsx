@@ -1,8 +1,5 @@
 import type React from 'react';
 import {
-  Cloud,
-  Copy,
-  Database,
   Eye,
   KeyRound,
   Lock,
@@ -13,8 +10,7 @@ import {
 } from 'lucide-react';
 import { GROUP_MEMBERS } from '../../data/members';
 import type { SyncStatus } from '../../hooks/useSupabaseSync';
-import { SUPABASE_SCHEMA_SQL } from '../../lib/supabase';
-import { copyTextFallback, formatBRL } from '../../lib/utils';
+import { formatBRL } from '../../lib/utils';
 import type {
   AttractionMeta,
   BudgetCategory,
@@ -40,8 +36,7 @@ export type AdminSectionKey =
   | 'custos'
   | 'reservas'
   | 'roteiro'
-  | 'lugares'
-  | 'supabase';
+  | 'lugares';
 
 interface AdminTabProps {
   config: TripConfig;
@@ -69,11 +64,8 @@ interface AdminTabProps {
   setPinError: (v: boolean) => void;
   adminSection: AdminSectionKey;
   setAdminSection: (s: AdminSectionKey) => void;
-  showSql: boolean;
-  setShowSql: React.Dispatch<React.SetStateAction<boolean>>;
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
-  syncErrorDetail: string;
   newStopForm: {
     dayDate: string;
     shift: ShiftType;
@@ -110,7 +102,6 @@ interface AdminTabProps {
   onAddStop: (e: React.FormEvent) => void;
   onAddBudgetItem: (e: React.FormEvent) => void;
   onDeletePlaceAsAdmin: (attr: AttractionMeta) => void;
-  onPushAllLocalToCloud: () => void;
   onSyncNow: () => void;
   showToast: (msg: string, type?: 'success' | 'info') => void;
 }
@@ -141,11 +132,8 @@ export function AdminTab({
   setPinError,
   adminSection,
   setAdminSection,
-  showSql,
-  setShowSql,
   syncStatus,
   lastSyncedAt,
-  syncErrorDetail,
   newStopForm,
   setNewStopForm,
   newBudgetForm,
@@ -154,7 +142,6 @@ export function AdminTab({
   onAddStop,
   onAddBudgetItem,
   onDeletePlaceAsAdmin,
-  onPushAllLocalToCloud,
   onSyncNow,
   showToast,
 }: AdminTabProps) {
@@ -200,13 +187,42 @@ export function AdminTab({
         </div>
 
         {isAdminAuthenticated ? (
-          <button
-            type="button"
-            onClick={() => setIsAdminAuthenticated(false)}
-            className="self-start md:self-center text-xs font-semibold text-[#CBD2EC] hover:text-white bg-[#212847] px-3.5 py-2 rounded-xl flex items-center gap-1.5 border border-[#8596D6]/20"
-          >
-            <Lock className="w-3.5 h-3.5" /> Voltar p/ Somente Leitura
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+            <span
+              className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-xl border ${
+                syncStatus === 'synced'
+                  ? 'bg-[#47C5B8]/15 border-[#47C5B8]/40 text-[#8AE5DB]'
+                  : syncStatus === 'syncing'
+                  ? 'bg-[#657EF8]/15 border-[#657EF8]/40 text-[#B8C5FF]'
+                  : syncStatus === 'error'
+                  ? 'bg-[#EC6B6B]/15 border-[#EC6B6B]/40 text-[#FFD0D0]'
+                  : 'bg-[#212847] border-[#8596D6]/25 text-[#CBD2EC]'
+              }`}
+            >
+              {syncStatus === 'synced'
+                ? `Nuvem OK${lastSyncedAt ? ` (${lastSyncedAt})` : ''}`
+                : syncStatus === 'syncing'
+                ? 'Sincronizando...'
+                : syncStatus === 'error'
+                ? 'Erro na nuvem'
+                : 'Modo Local'}
+            </span>
+            <button
+              type="button"
+              onClick={onSyncNow}
+              className="text-xs font-bold hoyo-accent-btn px-3 py-2 rounded-xl flex items-center gap-1.5"
+              title="Buscar atualizações do grupo agora"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Sincronizar
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAdminAuthenticated(false)}
+              className="text-xs font-semibold text-[#CBD2EC] hover:text-white bg-[#212847] px-3.5 py-2 rounded-xl flex items-center gap-1.5 border border-[#8596D6]/20"
+            >
+              <Lock className="w-3.5 h-3.5" /> Voltar p/ Somente Leitura
+            </button>
+          </div>
         ) : (
           <form onSubmit={onAdminLogin} className="flex items-center gap-2">
             <input
@@ -248,7 +264,6 @@ export function AdminTab({
               key: 'lugares',
               label: `Lugares Explorar (${attractions.filter((a) => !a.excludedReason).length})`,
             },
-            { key: 'supabase', label: 'Config & Nuvem' },
           ] as const
         ).map((sub) => (
           <button
@@ -849,174 +864,6 @@ export function AdminTab({
           isAdminAuthenticated={isAdminAuthenticated}
           onDeletePlaceAsAdmin={onDeletePlaceAsAdmin}
         />
-      )}
-
-      {/* ADMIN 5: SUPABASE & VERCEL */}
-      {adminSection === 'supabase' && (
-        <div className="rounded-3xl hoyo-card hoyo-gold-hairline p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-[#47C5B8]" />
-              <h3 className="text-base font-bold text-white">
-                Sincronização em Tempo Real (Supabase Gratuito)
-              </h3>
-            </div>
-
-            <span
-              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${
-                syncStatus === 'synced'
-                  ? 'bg-[#47C5B8]/15 border-[#47C5B8]/40 text-[#8AE5DB]'
-                  : syncStatus === 'syncing'
-                  ? 'bg-[#657EF8]/15 border-[#657EF8]/40 text-[#B8C5FF]'
-                  : syncStatus === 'error'
-                  ? 'bg-[#EC6B6B]/15 border-[#EC6B6B]/40 text-[#FFD0D0]'
-                  : 'bg-[#212847] border-[#8596D6]/25 text-[#CBD2EC]'
-              }`}
-            >
-              {syncStatus === 'synced'
-                ? `Conectado${lastSyncedAt ? ` (${lastSyncedAt})` : ''}`
-                : syncStatus === 'syncing'
-                ? 'Sincronizando...'
-                : syncStatus === 'error'
-                ? 'Erro na conexão'
-                : 'Modo Local (sem nuvem)'}
-            </span>
-          </div>
-
-          {syncStatus === 'error' && syncErrorDetail && (
-            <div className="rounded-2xl bg-[#EC6B6B]/12 border border-[#EC6B6B]/40 p-3.5 text-xs text-[#FFD0D0] space-y-1">
-              <p className="font-bold text-white">Detalhe do erro retornado pelo Supabase:</p>
-              <p className="font-mono break-all">{syncErrorDetail}</p>
-              <p className="pt-1">
-                Dica: Se aparecer “relation does not exist” ou “Could not find the table”, copie o SQL abaixo e clique em Run no SQL Editor do Supabase.
-              </p>
-            </div>
-          )}
-
-          <div className="rounded-2xl hoyo-card-inner p-4 space-y-2 text-xs text-[#CBD2EC]">
-            <p className="font-bold text-white">Como ativar o banco gratuito em 3 minutos:</p>
-            <ol className="list-decimal list-inside space-y-1 text-[#9BA3C2]">
-              <li>
-                Crie um projeto gratuito em{' '}
-                <span className="text-[#8CA0FF] font-semibold">supabase.com</span> (New Project).
-              </li>
-              <li>
-                Abra <strong className="text-white">SQL Editor</strong>, clique em{' '}
-                <strong className="text-[#8AE5DB]">Copiar SQL</strong> abaixo e execute (Run).
-              </li>
-              <li>
-                Vá em <strong className="text-white">Project Settings → API</strong>, cole a{' '}
-                <strong className="text-white">Project URL</strong> e a{' '}
-                <strong className="text-white">anon public key</strong> abaixo, clique em{' '}
-                <strong className="text-[#8AE5DB]">Testar & Enviar Dados</strong> e depois em{' '}
-                <strong className="text-[#8AE5DB]">Copiar Link</strong> ou{' '}
-                <strong className="text-[#8AE5DB]">WhatsApp</strong> para mandar o link já conectado para o grupo (ou configure via{' '}
-                <code className="text-[#E5B869]">VITE_SUPABASE_URL</code> e{' '}
-                <code className="text-[#E5B869]">VITE_SUPABASE_ANON_KEY</code> na Vercel!).
-              </li>
-            </ol>
-          </div>
-
-          {!isAdminAuthenticated ? (
-            <div className="rounded-2xl hoyo-card-inner p-4 text-xs text-[#9BA3C2] flex items-center gap-2.5">
-              <Lock className="w-4 h-4 text-[#E5B869] shrink-0" />
-              <span>
-                Digite o PIN do organizador (<strong className="text-white">2026</strong>) no topo desta aba para colar suas chaves do Supabase e gerenciar a nuvem.
-              </span>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[#CBD2EC] mb-1">
-                    PIN do Admin
-                  </label>
-                  <input
-                    type="text"
-                    value={config.adminPin}
-                    onChange={(e) => setConfig({ ...config, adminPin: e.target.value })}
-                    className="w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#CBD2EC] mb-1">
-                    SUPABASE_URL
-                  </label>
-                  <input
-                    type="text"
-                    value={config.supabaseUrl}
-                    onChange={(e) => setConfig({ ...config, supabaseUrl: e.target.value })}
-                    placeholder="https://xxxx.supabase.co"
-                    className="w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#CBD2EC] mb-1">
-                    SUPABASE_ANON_KEY
-                  </label>
-                  <input
-                    type="password"
-                    value={config.supabaseAnonKey}
-                    onChange={(e) =>
-                      setConfig({ ...config, supabaseAnonKey: e.target.value })
-                    }
-                    placeholder="eyJhbGciOi..."
-                    className="w-full hoyo-card-inner rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={onPushAllLocalToCloud}
-                  className="text-xs font-bold bg-[#2A9D8F] hover:bg-[#31B2A2] text-white px-3.5 py-2 rounded-xl inline-flex items-center gap-1.5"
-                >
-                  <Cloud className="w-3.5 h-3.5" /> Testar & Enviar Dados p/ Nuvem
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onSyncNow}
-                  className="text-xs font-bold hoyo-accent-btn px-3.5 py-2 rounded-xl inline-flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Sincronizar Agora
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ok = copyTextFallback(SUPABASE_SCHEMA_SQL);
-                    navigator.clipboard?.writeText(SUPABASE_SCHEMA_SQL).catch(() => {});
-                    if (ok) {
-                      showToast('Script SQL copiado!');
-                    } else {
-                      setShowSql(true);
-                      showToast('SQL aberto abaixo para você selecionar e copiar.', 'info');
-                    }
-                  }}
-                  className="text-xs font-bold bg-[#212847] hover:bg-[#2B3359] text-white px-3.5 py-2 rounded-xl inline-flex items-center gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" /> Copiar SQL
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowSql((v) => !v)}
-                  className="text-xs font-bold text-[#8CA0FF] hover:text-white px-2 py-2"
-                >
-                  {showSql ? 'Ocultar SQL' : 'Ver SQL'}
-                </button>
-              </div>
-
-              {showSql && (
-                <pre className="hoyo-card-inner rounded-2xl p-4 text-[11px] text-[#8AE5DB] overflow-x-auto leading-relaxed select-all">
-                  {SUPABASE_SCHEMA_SQL}
-                </pre>
-              )}
-            </>
-          )}
-        </div>
       )}
     </div>
   );
